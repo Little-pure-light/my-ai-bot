@@ -3,4 +3,3 @@ psycopg[binary]==3.2.1
 pgvector==0.3.3
 openai==1.46.0
 python-dotenv==1.0.1
- force rebuild
