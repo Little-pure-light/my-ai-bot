@@ -1,3 +1,5 @@
+from openai import OpenAI
+client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 import os, psycopg
 from pgvector.psycopg import register_vector
 from openai import OpenAI
