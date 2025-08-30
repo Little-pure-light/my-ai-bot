@@ -1,14 +1,12 @@
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
-# 變更：從 openai 換成 google.generativeai
+from openai import OpenAI
 import os
-import google.generativeai as genai
 
 # 診斷：印出環境變數狀態
 print("=== 環境變數檢查 ===")
 print(f"BOT_TOKEN: {'✅ 已設定' if os.getenv('BOT_TOKEN') else '❌ 未設定'}")
-# 變更：檢查 GEMINI_API_KEY
-print(f"GEMINI_API_KEY: {'✅ 已設定' if os.getenv('GEMINI_API_KEY') else '❌ 未設定'}")
+print(f"OPENAI_API_KEY: {'✅ 已設定' if os.getenv('OPENAI_API_KEY') else '❌ 未設定'}")
 print(f"DB_DSN: {'✅ 已設定' if os.getenv('DB_DSN') else '❌ 未設定'}")
 
 # 檢查 BOT_TOKEN 格式
@@ -22,8 +20,8 @@ if bot_token:
 else:
     print("❌ BOT_TOKEN 完全沒有讀取到")
 
-# 變更：使用 GEMINI_API_KEY
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# 設定 API Keys
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # 如果沒有 BOT_TOKEN，直接退出
@@ -31,26 +29,24 @@ if not BOT_TOKEN:
     print("❌ 無法啟動：BOT_TOKEN 未設定")
     exit(1)
 
-# 變更：初始化 Gemini 客戶端
+# OpenAI 客戶端
 try:
-    genai.configure(api_key=GEMINI_API_KEY)
-    print("✅ Gemini 客戶端初始化成功")
+    client = OpenAI(api_key=OPENAI_API_KEY)
+    print("✅ OpenAI 客戶端初始化成功")
 except Exception as e:
-    print(f"❌ Gemini 客戶端初始化失敗：{e}")
+    print(f"❌ OpenAI 客戶端初始化失敗：{e}")
 
 # 處理訊息
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
     
     try:
-        # 變更：使用 Gemini 的模型名稱與方法
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": user_input}]
+        ).choices[0].message.content
         
-        # 變更：呼叫 generate_content
-        response = model.generate_content(user_input)
-        
-        # 變更：從 response 物件中提取文字內容
-        await update.message.reply_text(response.text)
+        await update.message.reply_text(response)
         print(f"✅ 成功回覆用戶: {update.message.from_user.first_name}")
         
     except Exception as e:
