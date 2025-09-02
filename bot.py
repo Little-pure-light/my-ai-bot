@@ -109,46 +109,51 @@ FEW_SHOTS = [
 
 
 
-
 # --- 處理訊息主函式 ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
-    user_id = str(update.message.from_user.id) # 確保 user_id 是字串
+    user_id = str(update.message.from_user.id)
     user_name = update.message.from_user.first_name
-    
-    try:
-        # 步驟一：回溯記憶
-        conversation_history = get_conversation_history(user_id=user_id, limit=10) # 獲取最新的10筆對話
-        
-        # 步驟二：建立人格特性+刪除反詰提問
-     messages = [
-    {"role": "system", "content": SYSTEM_PROMPT},
-    *FEW_SHOTS
-]
-if conversation_history:
-    messages.append({"role":"system", "content": f"以下是我們過去的對話歷史：\n{conversation_history}"})
-messages.append({"role":"user", "content": user_input})
 
-                 
-        # 呼叫ChatGPT
+    try:
+        # 步驟一：回溯記憶（最近 10 筆）
+        conversation_history = get_conversation_history(user_id=user_id, limit=10)
+
+        # 步驟二：建立人格特性 + 禁止反詰問 +（可選）帶入歷史
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            *FEW_SHOTS
+        ]
+        if conversation_history:
+            messages.append({
+                "role": "system",
+                "content": f"以下是我們過去的對話歷史：\n{conversation_history}"
+            })
+        messages.append({"role": "user", "content": user_input})
+
+        # 步驟三：呼叫 ChatGPT（用環境變數控制輸出長度與溫度）
+        temperature = float(os.getenv("TEMP", "0.7"))
+        max_tokens  = int(os.getenv("MAX_OUTPUT_TOKENS", "1000"))
+
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
-            temperature=0.7,
-            max_tokens=250
+            temperature=temperature,
+            max_tokens=max_tokens
         ).choices[0].message.content
-        
+
         # 回覆用戶
         await update.message.reply_text(response)
         print(f"✅ 小宸光成功回覆 {user_name} (ID: {user_id})")
-        
+
         # 將對話儲存到記憶
         await add_to_memory(user_id, user_input, response)
-        
+
     except Exception as e:
         error_msg = f"哈尼～連接出現小問題：{str(e)} 💛"
         await update.message.reply_text(error_msg)
         print(f"❌ 處理訊息錯誤：{e}")
+
 
 # --- 啟動小宸光Bot ---
 try:
