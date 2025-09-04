@@ -19,7 +19,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # 使用 tini 作為 entrypoint，避免卡死
-ENTRYPOINT ["/usr/bin/tini\", \"--\"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 
 # 啟動 bot
-CMD [\"python\", \"bot.py\"]
+CMD ["python", "bot.py"]
