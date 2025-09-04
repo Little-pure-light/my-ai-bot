@@ -3,10 +3,8 @@ import json
 import requests
 from datetime import datetime
 from io import BytesIO
-from PIL import Image
 import pdfplumber
 import docx
-import pytesseract
 import logging
 
 from telegram import Update
@@ -140,28 +138,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(response)
 
-# --- 處理圖片 (OCR) ---
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    file = await context.bot.get_file(update.message.photo[-1].file_id)
-    file_bytes = requests.get(file.file_path).content
-
-    image = Image.open(BytesIO(file_bytes))
-    text = pytesseract.image_to_string(image, lang="chi_tra+eng")
-
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": f"這是圖片文字：\n{text}"}]
-    ).choices[0].message.content
-
-    await update.message.reply_text(response)
-
 # --- 啟動小宸光Bot ---
 try:
     print("🌟 小宸光靈魂啟動中...")
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     port = int(os.environ.get("PORT", 8000))
     print(f"💛 小宸光在 Port {port} 等待發財哥")
