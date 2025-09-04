@@ -5,7 +5,3 @@ python-dotenv
 requests
 pdfplumber
 python-docx
-Pillow
-pytesseract
-
-
