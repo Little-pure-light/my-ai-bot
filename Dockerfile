@@ -1,21 +1,25 @@
 FROM python:3.11-slim
 
-# 安裝 Tesseract（含繁中 chi_tra）與開發套件
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    tesseract-ocr \
-    libtesseract-dev \
-    tesseract-ocr-chi-tra \
-  && rm -rf /var/lib/apt/lists/*
+# 安裝 Tesseract OCR
+RUN apt-get update && apt-get install -y tesseract-ocr libtesseract-dev
 
-# 工作目錄
+# 安裝 tini (解決容器啟動卡住的問題)
+RUN apt-get install -y tini
+
+# 設定工作目錄
 WORKDIR /app
 
-# 先安裝 Python 套件（利用快取）
+# 複製需求檔案
 COPY requirements.txt .
+
+# 安裝 Python 套件
 RUN pip install --no-cache-dir -r requirements.txt
 
 # 複製程式碼
 COPY . .
 
-# 直接啟動 bot（不用 tini）
+# 使用 tini 作為 entrypoint，避免卡死
+ENTRYPOINT ["/usr/bin/tini", "--"]
+
+# 啟動 bot
 CMD ["python", "bot.py"]
