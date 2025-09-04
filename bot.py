@@ -29,7 +29,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "GPT-5-nano")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "GPT-4o")
 TEMP = float(os.getenv("TEMP", "0.3"))                  # 建議 0.2~0.3
 MAX_OUTPUT_TOKENS = int(os.getenv("MAX_OUTPUT_TOKENS", "220"))
 
