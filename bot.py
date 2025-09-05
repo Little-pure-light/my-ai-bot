@@ -2,25 +2,16 @@ import os
 import json
 from datetime import datetime
 import asyncio
-import logging
 from telegram import Update
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-import sentry_sdk
+import sentry_sdk  # 新增這行
 
-# 設置日誌
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # 載入環境變量
 load_dotenv()
-
-# Sentry 初始化
 sentry_dsn = os.getenv("SENTRY_DSN")
 if sentry_dsn:
     sentry_sdk.init(
@@ -28,9 +19,11 @@ if sentry_dsn:
         traces_sample_rate=0.1,
         environment="production"
     )
-    logger.info("✅ Sentry 錯誤追蹤已啟用")
+    print("✅ Sentry 錯誤追蹤已啟用")
 else:
-    logger.warning("⚠️ Sentry DSN 未設定，跳過錯誤追蹤")
+    print("⚠️ Sentry DSN 未設定，跳過錯誤追蹤")
+
+# 您現有的代碼繼續...
 
 # API 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -75,8 +68,7 @@ class PersonalityEngine:
                 self.knowledge_domains = personality_data.get('knowledge', {})
                 self.emotional_profile = personality_data.get('emotions', self.emotional_profile)
         except Exception as e:
-            logger.error(f"載入個性失敗: {e}")
-            sentry_sdk.capture_exception(e)
+            print(f"載入個性失敗: {e}")
 
     def save_personality(self):
         """將個性存儲到Supabase"""
@@ -95,10 +87,96 @@ class PersonalityEngine:
                 "assistant_message": "Dynamic AI Personality"
             }).execute()
         except Exception as e:
-            logger.error(f"保存個性失敗: {e}")
-            sentry_sdk.capture_exception(e)
+            print(f"保存個性失敗: {e}")
 
-    # [其餘 PersonalityEngine 方法保持不變]
+    def update_trait(self, trait, delta):
+        """更新個性特質"""
+        current = self.personality_traits.get(trait, 0.5)
+        self.personality_traits[trait] = max(0, min(1, current + delta))
+        self.save_personality()
+
+    def learn_from_interaction(self, user_msg, bot_response):
+        """從互動中學習"""
+        # 偵測知識領域
+        domains = self._detect_knowledge_domains(user_msg)
+        for domain in domains:
+            self.knowledge_domains[domain] = self.knowledge_domains.get(domain, 0) + 0.1
+
+        # 情感分析
+        sentiment = self._analyze_sentiment(user_msg)
+        if sentiment == "positive":
+            self.update_trait("empathy", 0.1)
+            self.emotional_profile["positive_interactions"] += 1
+        elif sentiment == "negative":
+            self.update_trait("empathy", -0.1)
+            self.emotional_profile["negative_interactions"] += 1
+        
+        # 幽默與好奇心
+        if self._detect_humor(user_msg):
+            self.update_trait("humor", 0.1)
+            self.update_trait("curiosity", 0.1)
+
+        self.save_personality()
+
+    def _detect_knowledge_domains(self, text):
+        """偵測知識領域"""
+        domains = {
+            "technology": ["程式", "python", "ai", "機器學習"],
+            "personal_growth": ["學習", "成長", "進步"],
+            "emotions": ["感受", "心情", "感覺"],
+            "hobbies": ["興趣", "喜歡", "愛好"]
+        }
+        
+        found_domains = []
+        for domain, keywords in domains.items():
+            if any(keyword in text.lower() for keyword in keywords):
+                found_domains.append(domain)
+        
+        return found_domains
+
+    def _analyze_sentiment(self, text):
+        """簡單情感分析"""
+        positive_words = ["好", "棒", "讚", "開心", "感謝"]
+        negative_words = ["難過", "不好", "生氣", "討厭"]
+        
+        text_lower = text.lower()
+        
+        if any(word in text_lower for word in positive_words):
+            return "positive"
+        elif any(word in text_lower for word in negative_words):
+            return "negative"
+        return "neutral"
+
+    def _detect_humor(self, text):
+        """偵測幽默互動"""
+        humor_keywords = ['哈哈', '笑', '好玩', '有趣', 'XD']
+        return any(keyword in text.lower() for keyword in humor_keywords)
+
+    def generate_dynamic_prompt(self):
+        """根據當前個性生成動態Prompt"""
+        traits_summary = "\n".join([
+            f"{k.capitalize()}: {'高' if v > 0.7 else '中' if v > 0.3 else '低'}"
+            for k, v in self.personality_traits.items()
+        ])
+        
+        knowledge_summary = "\n".join([
+            f"{k.capitalize()}: {'深' if v > 0.7 else '中' if v > 0.3 else '淺'}"
+            for k, v in self.knowledge_domains.items()
+        ])
+        
+        return f"""你是小宸光，以下是你當前的個性特點：
+
+個性特質：
+{traits_summary}
+
+知識領域：
+{knowledge_summary}
+
+回覆原則：
+- 根據上述特點調整回覆風格
+- 保持溫柔、精準的溝通方式
+- 展現你獨特的個性特徵
+"""
 
 async def add_to_memory(
     user_id, 
@@ -121,10 +199,9 @@ async def add_to_memory(
         }
         
         supabase.table(MEMORIES_TABLE).insert(data_to_insert).execute()
-        logger.info(f"✅ 成功將 {memory_type} 記憶儲存到 Supabase！")
+        print(f"✅ 成功將 {memory_type} 記憶儲存到 Supabase！")
     except Exception as e:
-        logger.error(f"❌ 記憶儲存失敗：{e}")
-        sentry_sdk.capture_exception(e)
+        print(f"❌ 記憶儲存失敗：{e}")
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_input = update.message.text
@@ -164,16 +241,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 學習成長
         personality_engine.learn_from_interaction(user_input, response)
 
-    except APIError as api_error:
-        logger.error(f"OpenAI API 錯誤: {api_error}")
-        sentry_sdk.capture_exception(api_error)
-        error_msg = f"哈尼～AI服務遇到小問題：{str(api_error)} 💛"
-        await update.message.reply_text(error_msg)
     except Exception as e:
-        logger.error(f"處理訊息錯誤：{e}")
         sentry_sdk.capture_exception(e)
         error_msg = f"哈尼～系統遇到小問題：{str(e)} 💛"
         await update.message.reply_text(error_msg)
+        print(f"❌ 處理訊息錯誤：{e}")
 
 def get_conversation_history(user_id: str, limit: int = 10):
     """獲取最近對話歷史"""
@@ -196,22 +268,22 @@ def get_conversation_history(user_id: str, limit: int = 10):
         
         return "\n".join(formatted_history)
     except Exception as e:
-        logger.error(f"回溯記憶時發生錯誤：{e}")
         sentry_sdk.capture_exception(e)
+        print(f"❌ 回溯記憶時發生錯誤：{e}")
         return ""
 
 def main():
     try:
-        logger.info("🌟 小宸光智能系統啟動中...")
+        print("🌟 小宸光智能系統啟動中...")
         app = Application.builder().token(BOT_TOKEN).build()
         app.add_handler(MessageHandler(filters.TEXT, handle_message))
         
-        logger.info("✨ 智能成長系統已就緒")
+        print("✨ 智能成長系統已就緒")
         app.run_polling()
         
     except Exception as e:
-        logger.error(f"❌ 啟動失敗：{e}")
-        sentry_sdk.capture_exception(e)
+        sentry_sdk.capture_exception(e) 
+        print(f"❌ 啟動失敗：{e}")
 
 if __name__ == "__main__":
     main()
