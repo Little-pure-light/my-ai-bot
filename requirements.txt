@@ -2,9 +2,6 @@ python-telegram-bot==20.0
 openai==1.35.0
 supabase
 psycopg2-binary==2.9.9
-google-generativeai
 python-dotenv
-sentry-sdk
-pip install numpy
 
 
