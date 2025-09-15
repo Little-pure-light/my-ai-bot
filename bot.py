@@ -9,6 +9,8 @@ from openai import OpenAI
 from supabase import create_client, Client
 from dotenv import load_dotenv
 import sentry_sdk
+import numpy as np  # 確保是這樣導入
+
 
 # 載入環境變量
 load_dotenv()
