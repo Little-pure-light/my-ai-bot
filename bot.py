@@ -9,6 +9,10 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from modules.file_handler import FileHandler
+
+# 初始化檔案處理器
+file_handler = FileHandler()
 
 # 載入環境變量
 load_dotenv()
@@ -740,6 +744,30 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error_message = "哈尼，我遇到了一點小問題，讓我調整一下～✨"
         await update.message.reply_text(error_message)
         print(f"❌ 處理訊息時發生錯誤: {e}")
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """處理文件上傳"""
+    try:
+        # 獲取文件信息
+        document = update.message.document
+        user_id = str(update.message.from_user.id)
+        
+        await update.message.reply_text(f"📄 正在處理文件：{document.file_name}")
+        
+        # 下載文件
+        file = await context.bot.get_file(document.file_id)
+        file_path = f"uploads/{user_id}_{document.file_name}"
+        
+        # 確保uploads目錄存在
+        import os
+        os.makedirs("uploads", exist_ok=True)
+        
+        # 下載並保存文件
+        await file.download_to_drive(file_path)
+        
+        await update.message.reply_text(f"✅ 文件已成功上傳並保存！\n📁 文件名：{document.file_name}")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ 文件處理失敗：{e}")
 
 def main():
     """主程式入口"""
@@ -803,6 +831,71 @@ def main():
         print(f"❌ OpenAI API 連接失敗: {e}")
         print("請檢查 API Key 是否有效")
         return
+
+# 處理文件功能
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """處理用戶上傳的文件"""
+    try:
+        user_id = str(update.effective_user.id)
+        
+        # 檢查是否有文件
+        if not update.message.document:
+            await update.message.reply_text("❌ 沒有檢測到文件，請重新上傳。")
+            return
+            
+        file = update.message.document
+        
+        # 檢查文件類型
+        if not file.file_name.endswith(('.txt', '.pdf', '.docx')):
+            await update.message.reply_text("❌ 目前只支援 .txt、.pdf、.docx 格式的文件。")
+            return
+            
+        # 檢查文件大小（限制20MB）
+        if file.file_size > 20 * 1024 * 1024:
+            await update.message.reply_text("❌ 文件大小超過20MB限制。")
+            return
+            
+        await update.message.reply_text("📄 正在處理您的文件，請稍候...")
+        
+        # 下載文件
+        file_obj = await context.bot.get_file(file.file_id)
+        file_path = f"temp_{user_id}_{file.file_name}"
+        await file_obj.download_to_drive(file_path)
+        
+        try:
+            # 讀取文件內容
+            if file.file_name.endswith('.txt'):
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+            elif file.file_name.endswith('.pdf'):
+                # PDF處理需要額外的庫，這裡先用簡單的文本處理
+                with open(file_path, 'rb') as f:
+                    content = f"PDF文件: {file.file_name} (大小: {file.file_size} bytes)"
+            elif file.file_name.endswith('.docx'):
+                # DOCX處理需要額外的庫，這裡先用簡單的文本處理  
+                with open(file_path, 'rb') as f:
+                    content = f"DOCX文件: {file.file_name} (大小: {file.file_size} bytes)"
+            
+            # 截取內容預覽（前500字符）
+            preview = content[:500] + "..." if len(content) > 500 else content
+            
+            # 添加到記憶中
+            response = f"✅ 文件已成功處理！\n\n📋 **文件信息：**\n- 文件名：{file.file_name}\n- 大小：{file.file_size} bytes\n\n📖 **內容預覽：**\n{preview}"
+            
+            await add_to_memory(user_id, f"上傳文件: {file.file_name}", response)
+            await update.message.reply_text(response)
+            
+        finally:
+            # 清理臨時文件
+            import os
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                
+    except Exception as e:
+        await update.message.reply_text(f"❌ 處理文件時發生錯誤：{str(e)}")
+        print(f"文件處理錯誤: {e}")
+
+
     
     # 建立並啟動機器人
     try:
@@ -810,6 +903,8 @@ def main():
         
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+        
         
         print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
