@@ -3,11 +3,14 @@ import json
 import random
 from datetime import datetime
 import asyncio
-from telegram import Update
+from telegram import Update.
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
-from dotenv import load_dotenv
+from dotenv import load_dotenv.
+from xiaochenguang_soul import XiaoChenGuangSoul
+
+
 
 # 載入環境變量
 load_dotenv()
@@ -409,6 +412,18 @@ def main():
     print("  ✅ 傳統搜尋備用")
     print("  ✅ 個性成長系統")
     print("  ✅ 資料庫相容性修正")
+
+    def main():
+    """主程式入口"""
+    print("🚀 小宸光正在啟動...")
+    
+    # 🌟 初始化小宸光的靈魂（加在這裡！）
+    global xiaochenguang_soul
+    xiaochenguang_soul = XiaoChenGuangSoul()
+    
+    # 檢查必要的環境變數（原本的程式碼）
+    required_vars = ["OPENAI_API_KEY", "BOT_TOKEN", "SUPABASE_URL", "SUPABASE_KEY"]
+    # ... 其他程式碼
     
     # 檢查必要的環境變數
     required_vars = ["OPENAI_API_KEY", "BOT_TOKEN", "SUPABASE_URL", "SUPABASE_KEY"]
