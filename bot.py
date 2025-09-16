@@ -9,10 +9,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from modules.file_handler import FileHandler
 
-# 初始化檔案處理器
-file_handler = FileHandler()
 
 # 載入環境變量
 load_dotenv()
