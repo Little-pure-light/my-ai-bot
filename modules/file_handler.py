@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from telegram import Update, Document
 from telegram.ext import ContextTypes
 
-class XiaoChenGuangFileHandler:  # 改成正確的類別名稱
+class FileHandler:
     """小宸光檔案處理模組"""
     
     def __init__(self, upload_dir: str = "uploads"):
@@ -53,3 +53,4 @@ class XiaoChenGuangFileHandler:  # 改成正確的類別名稱
                     return f.read()
             except:
                 return "無法讀取檔案內容"
+
