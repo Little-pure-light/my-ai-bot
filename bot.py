@@ -9,6 +9,8 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
+import sys
+sys.path.append('modules')
 from modules.file_handler import FileHandler
 
 
