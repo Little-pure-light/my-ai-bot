@@ -6,7 +6,7 @@ openai==1.3.0
 
 # Supabase數據庫
 supabase==2.0.0
-postgrest==0.10.0
+postgrest>=0.10.0
 gotrue==1.0.1
 
 # 數據庫連接
@@ -17,8 +17,7 @@ SQLAlchemy>=2.0.0
 python-dotenv>=0.21.0
 environs>=9.5.0
 
-# 異步與併發
-asyncio>=3.4.3
+# 異步與併發（移除asyncio）
 httpx>=0.24.0
 
 # 日誌與錯誤追蹤
