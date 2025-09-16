@@ -9,7 +9,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from modules.file_handler import XiaoChenGuangFileHandler
+from modules.file_handler import FileHandler
 
 
 # 載入環境變量
@@ -880,8 +880,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 建立並啟動機器人
     try:
         app = Application.builder().token(BOT_TOKEN).build()
-        # 初始化文件處理器
-file_handler = XiaoChenGuangFileHandler()
+        file_handler = FileHandler()
         
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
