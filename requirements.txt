@@ -6,7 +6,7 @@ openai==1.3.0
 
 # Supabase數據庫
 supabase==2.0.0
-postgrest==0.10.0
+postgrest==0.13.2
 gotrue==1.0.4
 
 # 數據庫連接
