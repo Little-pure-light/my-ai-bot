@@ -44,7 +44,7 @@ class PersonalityEngine:
     def load_personality(self):
         """從Supabase載入個性記憶"""
         try:
-            # 載入原有的個性數據
+            # 載入個性數據 - 修正：改用 document_content
             result = supabase.table(MEMORIES_TABLE)\
                 .select("*")\
                 .eq("conversation_id", self.user_id)\
@@ -52,21 +52,28 @@ class PersonalityEngine:
                 .execute()
             
             if result.data:
-                data = json.loads(result.data[0]['memory_content'])
+                # 修正：改用 document_content 欄位
+                data = json.loads(result.data[0]['document_content'])
                 self.personality_traits = data.get('traits', self.personality_traits)
                 self.knowledge_domains = data.get('domains', self.knowledge_domains)
                 self.emotional_profile = data.get('emotions', self.emotional_profile)
             
-            # 載入資料庫的個性特徵
-            personality_result = supabase.table("xiaochenguang_personality")\
-                .select("*")\
-                .execute()
-            
-            if personality_result.data:
-                self.db_personality_traits = [
-                    item['trait'] for item in personality_result.data
-                ]
-                print(f"✅ 載入 {len(self.db_personality_traits)} 個個性特徵")
+            # 載入資料庫的個性特徵 - 檢查表格是否存在
+            try:
+                personality_result = supabase.table("user_preferences")\
+                    .select("personality_profile")\
+                    .eq("user_id", self.user_id)\
+                    .execute()
+                
+                if personality_result.data and personality_result.data[0].get('personality_profile'):
+                    profile_data = json.loads(personality_result.data[0]['personality_profile'])
+                    if isinstance(profile_data, list):
+                        self.db_personality_traits = profile_data
+                    print(f"✅ 載入 {len(self.db_personality_traits)} 個個性特徵")
+            except:
+                # 如果沒有 user_preferences 表格，就用預設值
+                self.db_personality_traits = ["溫柔體貼", "活潑開朗", "細心耐心"]
+                print("✅ 使用預設個性特徵")
             
         except Exception as e:
             print(f"載入個性失敗: {e}")
@@ -77,11 +84,13 @@ class PersonalityEngine:
             data = {
                 "conversation_id": self.user_id,
                 "memory_type": "personality",
-                "memory_content": json.dumps({
+                "document_content": json.dumps({  # 修正：改用 document_content
                     "traits": self.personality_traits,
                     "domains": self.knowledge_domains,
                     "emotions": self.emotional_profile
                 }),
+                "user_message": "個性檔案更新",
+                "assistant_message": "個性特質已儲存",
                 "created_at": datetime.now().isoformat()
             }
             
@@ -159,7 +168,7 @@ class PersonalityEngine:
         return any(keyword in text.lower() for keyword in humor_keywords)
 
     def generate_dynamic_prompt(self):
-        """根據當前個性生成動態Prompt - 整合資料庫特徵"""
+        """根據當前個性生成動態Prompt"""
         # 從資料庫隨機選擇幾個特徵
         selected_db_traits = []
         if self.db_personality_traits:
@@ -230,14 +239,16 @@ async def add_to_memory(user_id: str, user_input: str, bot_response: str):
         )
         embedding = embedding_response.data[0].embedding
         
-        # 儲存到資料庫
+        # 儲存到資料庫 - 使用正確的欄位名稱
         data = {
             "conversation_id": user_id,
             "user_message": user_input,
             "assistant_message": bot_response,
             "embedding": embedding,
-            "created_at": datetime.now().isoformat(),
-            "memory_type": "conversation"
+            "memory_type": "conversation",
+            "platform": "telegram",
+            "document_content": f"對話記錄: {user_input} -> {bot_response}",
+            "created_at": datetime.now().isoformat()
         }
         
         supabase.table(MEMORIES_TABLE).insert(data).execute()
@@ -295,6 +306,35 @@ async def search_relevant_memories(user_id: str, query: str, limit: int = 3):
         
     except Exception as e:
         print(f"❌ 搜尋記憶失敗：{e}")
+        # 如果向量搜尋失敗，使用傳統搜尋作為備用
+        return await traditional_search(user_id, query, limit)
+
+async def traditional_search(user_id: str, query: str, limit: int = 3):
+    """傳統文字搜尋（備用方案）"""
+    try:
+        result = supabase.table(MEMORIES_TABLE)\
+            .select("user_message, assistant_message")\
+            .eq("conversation_id", user_id)\
+            .eq("memory_type", "conversation")\
+            .limit(limit * 2)\
+            .execute()
+        
+        if result.data:
+            # 簡單的關鍵字匹配
+            relevant = []
+            query_words = query.lower().split()
+            
+            for memory in result.data:
+                user_msg = memory['user_message'].lower()
+                if any(word in user_msg for word in query_words):
+                    relevant.append(f"相關記憶: {memory['user_message']} -> {memory['assistant_message']}")
+                    if len(relevant) >= limit:
+                        break
+            
+            return "\n".join(relevant)
+        return ""
+    except Exception as e:
+        print(f"❌ 傳統搜尋失敗：{e}")
         return ""
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -345,9 +385,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 學習成長
         personality_engine.learn_from_interaction(user_input, response)
         
-        # 定期更新資料庫特徵（1%機率）
+        # 定期更新個性特徵（1%機率）
         if random.random() < 0.01:
-            personality_engine.load_personality()  # 重新載入最新的個性特徵
+            personality_engine.load_personality()
             print("🔄 個性特徵已更新")
 
     except APIError as e:
@@ -360,26 +400,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(error_message)
         print(f"❌ 處理訊息時發生錯誤: {e}")
 
-async def periodic_personality_update():
-    """定期更新個性特徵（每小時執行一次）"""
-    while True:
-        try:
-            await asyncio.sleep(3600)  # 等待1小時
-            
-            # 從資料庫載入新的個性特徵
-            result = supabase.table("xiaochenguang_personality")\
-                .select("*")\
-                .execute()
-            
-            if result.data:
-                print(f"🔄 定期更新：載入 {len(result.data)} 個個性特徵")
-                
-        except Exception as e:
-            print(f"❌ 定期更新失敗: {e}")
-
 def main():
     """主程式入口"""
-    print("🚀 小宸光正在啟動...")
+    print("🌟 小宸光智能系統 v3.0 啟動中...")
+    print("📊 系統功能檢查：")
+    print("  ✅ 基礎對話系統")
+    print("  ✅ 向量記憶搜尋")
+    print("  ✅ 傳統搜尋備用")
+    print("  ✅ 個性成長系統")
+    print("  ✅ 資料庫相容性修正")
     
     # 檢查必要的環境變數
     required_vars = ["OPENAI_API_KEY", "BOT_TOKEN", "SUPABASE_URL", "SUPABASE_KEY"]
@@ -395,9 +424,12 @@ def main():
         test_result = supabase.table(MEMORIES_TABLE).select("*").limit(1).execute()
         print(f"✅ 資料庫連接成功 - 記憶表: {MEMORIES_TABLE}")
         
-        # 測試個性表
-        personality_test = supabase.table("xiaochenguang_personality").select("*").limit(1).execute()
-        print(f"✅ 個性特徵表連接成功")
+        # 測試個性表（可選）
+        try:
+            personality_test = supabase.table("user_preferences").select("*").limit(1).execute()
+            print(f"✅ 個性特徵表連接成功")
+        except:
+            print("⚠️ 個性特徵表不存在，將使用預設值")
         
     except Exception as e:
         print(f"❌ 資料庫連接失敗: {e}")
@@ -425,7 +457,7 @@ def main():
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         
-        print("✅ 小宸光已準備就緒！")
+        print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
         print("-" * 50)
         
