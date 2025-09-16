@@ -1,35 +1,6 @@
-# Telegram Bot框架
-python-telegram-bot==20.5
-
-# OpenAI API
-openai==1.3.0
-
-# Supabase數據庫
-supabase==2.0.0
-postgrest==0.13.2
-gotrue==1.0.4
-
-# 數據庫連接
+python-telegram-bot==20.0
+openai==1.35.0
+supabase
 psycopg2-binary==2.9.9
-SQLAlchemy>=2.0.0
-
-# 環境與配置
-python-dotenv>=0.21.0
-environs>=9.5.0
-
-# 異步與併發
-asyncio>=3.4.3
-httpx>=0.24.0
-
-# 日誌與錯誤追蹤
-sentry-sdk>=1.22.0
-loguru>=0.7.0
-
-# 工具庫
-requests>=2.28.0
-python-dateutil>=2.8.2
-pydantic>=2.0.0
-
-# 可選科學計算
-numpy>=1.22.0
-pandas>=1.4.0
+google-generativeai
+python-dotenv
