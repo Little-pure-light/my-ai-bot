@@ -9,6 +9,7 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from modules.file_handler import XiaoChenGuangFileHandler
 
 
 # 載入環境變量
@@ -741,31 +742,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         error_message = "哈尼，我遇到了一點小問題，讓我調整一下～✨"
         await update.message.reply_text(error_message)
         print(f"❌ 處理訊息時發生錯誤: {e}")
+
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """處理文件上傳"""
-    try:
-        # 獲取文件信息
-        document = update.message.document
-        user_id = str(update.message.from_user.id)
-        
-        await update.message.reply_text(f"📄 正在處理文件：{document.file_name}")
-        
-        # 下載文件
-        file = await context.bot.get_file(document.file_id)
-        file_path = f"uploads/{user_id}_{document.file_name}"
-        
-        # 確保uploads目錄存在
-        import os
-        os.makedirs("uploads", exist_ok=True)
-        
-        # 下載並保存文件
-        await file.download_to_drive(file_path)
-        
-        await update.message.reply_text(f"✅ 文件已成功上傳並保存！\n📁 文件名：{document.file_name}")
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ 文件處理失敗：{e}")
-
+    user_id = str(update.message.from_user.id)
+    result = await file_handler.handle_file(update, context, user_id)
+    await update.message.reply_text(result)
+    
 def main():
     """主程式入口"""
     print("🌟 小宸光智能系統 v5.0 情感識別強化版 啟動中...")
@@ -897,6 +880,8 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 建立並啟動機器人
     try:
         app = Application.builder().token(BOT_TOKEN).build()
+        # 初始化文件處理器
+file_handler = XiaoChenGuangFileHandler()
         
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
