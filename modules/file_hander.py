@@ -1,145 +1,66 @@
+# modules/file_handler.py
 import os
-import json
 import logging
-import pandas as pd
-import docx
-import PyPDF2
-import csv
-import xml.etree.ElementTree as ET
-import chardet
+from pathlib import Path
+from typing import Optional, Dict, Any
+from telegram import Update, Document
+from telegram.ext import ContextTypes
 
 class FileHandler:
-    def __init__(self, log_level=logging.INFO):
-        logging.basicConfig(
-            level=log_level, 
-            format='%(asctime)s - %(levelname)s: %(message)s'
-        )
-        self.logger = logging.getLogger(__name__)
-
-    def detect_encoding(self, file_path):
-        """
-        自動偵測文件編碼
-        """
-        with open(file_path, 'rb') as file:
-            result = chardet.detect(file.read())
-        return result['encoding']
-
-    def read_file(self, file_path):
-        """
-        通用文件讀取方法
-        """
-        if not os.path.exists(file_path):
-            self.logger.error(f"文件不存在: {file_path}")
-            return None
-
-        file_ext = os.path.splitext(file_path)[1].lower()
-        
-        try:
-            if file_ext in ['.txt', '.log', '.md']:
-                encoding = self.detect_encoding(file_path)
-                with open(file_path, 'r', encoding=encoding) as f:
-                    return f.read()
-            
-            elif file_ext == '.json':
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            
-            elif file_ext == '.csv':
-                return pd.read_csv(file_path).to_dict(orient='records')
-            
-            elif file_ext in ['.xls', '.xlsx']:
-                return pd.read_excel(file_path).to_dict(orient='records')
-            
-            elif file_ext == '.docx':
-                doc = docx.Document(file_path)
-                return '\n'.join([paragraph.text for paragraph in doc.paragraphs])
-            
-            elif file_ext == '.pdf':
-                with open(file_path, 'rb') as f:
-                    pdf_reader = PyPDF2.PdfReader(f)
-                    text = ''
-                    for page in pdf_reader.pages:
-                        text += page.extract_text()
-                    return text
-            
-            elif file_ext == '.xml':
-                tree = ET.parse(file_path)
-                root = tree.getroot()
-                return ET.tostring(root, encoding='unicode')
-            
-            else:
-                self.logger.warning(f"不支援的文件類型: {file_ext}")
-                return None
-        
-        except Exception as e:
-            self.logger.error(f"讀取文件 {file_path} 時發生錯誤: {e}")
-            return None
-
-    def save_file(self, data, file_path):
-        """
-        通用文件儲存方法
-        """
-        file_ext = os.path.splitext(file_path)[1].lower()
-        
-        try:
-            if file_ext == '.txt':
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write(str(data))
-            
-            elif file_ext == '.json':
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False, indent=4)
-            
-            elif file_ext == '.csv':
-                pd.DataFrame(data).to_csv(file_path, index=False)
-            
-            elif file_ext in ['.xls', '.xlsx']:
-                pd.DataFrame(data).to_excel(file_path, index=False)
-            
-            else:
-                self.logger.warning(f"不支援的儲存文件類型: {file_ext}")
-                return False
-            
-            self.logger.info(f"成功儲存文件: {file_path}")
-            return True
-        
-        except Exception as e:
-            self.logger.error(f"儲存文件 {file_path} 時發生錯誤: {e}")
-            return False
-
-    def list_files(self, directory, extensions=None):
-        """
-        列出目錄下符合條件的文件
-        """
-        try:
-            if not os.path.isdir(directory):
-                self.logger.error(f"無效的目錄: {directory}")
-                return []
-
-            all_files = os.listdir(directory)
-            
-            if extensions:
-                return [
-                    f for f in all_files 
-                    if os.path.isfile(os.path.join(directory, f)) 
-                    and os.path.splitext(f)[1].lower() in extensions
-                ]
-            
-            return [f for f in all_files if os.path.isfile(os.path.join(directory, f))]
-        
-        except Exception as e:
-            self.logger.error(f"列出文件時發生錯誤: {e}")
-            return []
-
-# 使用範例
-if __name__ == "__main__":
-    handler = FileHandler()
+    """檔案處理模組"""
     
-    # 讀取文件
-    content = handler.read_file('example.txt')
+    def __init__(self, upload_dir: str = "uploads"):
+        self.upload_dir = Path(upload_dir)
+        self.upload_dir.mkdir(exist_ok=True)
+        self.supported_formats = {'.txt', '.pdf', '.docx', '.md'}
+        
+    async def handle_document(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> Dict[str, Any]:
+        """處理用戶上傳的文件"""
+        try:
+            user_id = update.effective_user.id
+            document: Document = update.message.document
+            
+            # 檢查檔案格式
+            file_ext = Path(document.file_name).suffix.lower()
+            if file_ext not in self.supported_formats:
+                return {
+                    "success": False,
+                    "message": f"不支援的檔案格式: {file_ext}\n支援格式: {', '.join(self.supported_formats)}"
+                }
+            
+            # 創建用戶專屬資料夾
+            user_dir = self.upload_dir / str(user_id)
+            user_dir.mkdir(exist_ok=True)
+            
+            # 下載檔案
+            file = await context.bot.get_file(document.file_id)
+            file_path = user_dir / document.file_name
+            await file.download_to_drive(file_path)
+            
+            # 讀取檔案內容
+            content = await self._read_file_content(file_path)
+            
+            return {
+                "success": True,
+                "message": f"檔案 {document.file_name} 上傳成功！",
+                "file_path": str(file_path),
+                "content": content,
+                "file_size": document.file_size
+            }
+            
+        except Exception as e:
+            logging.error(f"檔案處理錯誤: {e}")
+            return {
+                "success": False,
+                "message": f"檔案處理失敗: {str(e)}"
+            }
     
-    # 儲存文件
-    handler.save_file(content, 'output.txt')
-    
-    # 列出特定類型文件
-    files = handler.list_files('.', ['.txt', '.json'])
+    async def _read_file_content(self, file_path: Path) -> str:
+        """讀取檔案內容"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                return f.read()
+        except UnicodeDecodeError:
+            # 嘗試其他編碼
+            with open(file_path, 'r', encoding='big5') as f:
+                return f.read()
