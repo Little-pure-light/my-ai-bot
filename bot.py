@@ -8,20 +8,9 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-import sentry_sdk
 
 # 載入環境變量
 load_dotenv()
-sentry_dsn = os.getenv("SENTRY_DSN")
-if sentry_dsn:
-    sentry_sdk.init(
-        dsn=sentry_dsn,
-        traces_sample_rate=0.1,
-        environment="production"
-    )
-    print("✅ Sentry 錯誤追蹤已啟用")
-else:
-    print("⚠️ Sentry DSN 未設定，跳過錯誤追蹤")
 
 # API 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -49,7 +38,7 @@ class PersonalityEngine:
             "negative_interactions": 0,
             "neutral_interactions": 0
         }
-        self.db_personality_traits = []  # 新增：存儲資料庫的個性特徵
+        self.db_personality_traits = []
         self.load_personality()
 
     def load_personality(self):
@@ -68,7 +57,7 @@ class PersonalityEngine:
                 self.knowledge_domains = data.get('domains', self.knowledge_domains)
                 self.emotional_profile = data.get('emotions', self.emotional_profile)
             
-            # 新增：載入資料庫的個性特徵
+            # 載入資料庫的個性特徵
             personality_result = supabase.table("xiaochenguang_personality")\
                 .select("*")\
                 .execute()
@@ -255,7 +244,6 @@ async def add_to_memory(user_id: str, user_input: str, bot_response: str):
         print(f"✅ 記憶已儲存 - 用戶: {user_id[:8]}...")
         
     except Exception as e:
-        sentry_sdk.capture_exception(e)
         print(f"❌ 儲存記憶失敗：{e}")
 
 def get_conversation_history(user_id: str, limit: int = 10):
@@ -278,7 +266,6 @@ def get_conversation_history(user_id: str, limit: int = 10):
         return ""
         
     except Exception as e:
-        sentry_sdk.capture_exception(e)
         print(f"❌ 獲取歷史失敗：{e}")
         return ""
 
@@ -307,7 +294,6 @@ async def search_relevant_memories(user_id: str, query: str, limit: int = 3):
         return ""
         
     except Exception as e:
-        sentry_sdk.capture_exception(e)
         print(f"❌ 搜尋記憶失敗：{e}")
         return ""
 
@@ -361,39 +347,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 定期更新資料庫特徵（1%機率）
         if random.random() < 0.01:
-            personality_engine
-        # 調用OpenAI
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.7,
-            max_tokens=1000
-        ).choices[0].message.content
-
-        # 回覆用戶
-        await update.message.reply_text(response)
-
-        # 儲存記憶
-        await add_to_memory(user_id, user_input, response)
-        
-        # 學習成長
-        personality_engine.learn_from_interaction(user_input, response)
-        
-        # 定期更新資料庫特徵（1%機率）
-        if random.random() < 0.01:
             personality_engine.load_personality()  # 重新載入最新的個性特徵
             print("🔄 個性特徵已更新")
 
     except APIError as e:
         error_message = "哈尼，我現在有點累了，稍微休息一下再陪你聊天好嗎？💛"
         await update.message.reply_text(error_message)
-        sentry_sdk.capture_exception(e)
         print(f"❌ OpenAI API錯誤: {e}")
         
     except Exception as e:
         error_message = "哈尼，我遇到了一點小問題，讓我調整一下～✨"
         await update.message.reply_text(error_message)
-        sentry_sdk.capture_exception(e)
         print(f"❌ 處理訊息時發生錯誤: {e}")
 
 async def periodic_personality_update():
@@ -412,18 +376,17 @@ async def periodic_personality_update():
                 
         except Exception as e:
             print(f"❌ 定期更新失敗: {e}")
-            sentry_sdk.capture_exception(e)
 
 def main():
     """主程式入口"""
     print("🚀 小宸光正在啟動...")
     
-    # 檢查必要的環境變量
+    # 檢查必要的環境變數
     required_vars = ["OPENAI_API_KEY", "BOT_TOKEN", "SUPABASE_URL", "SUPABASE_KEY"]
     missing_vars = [var for var in required_vars if not os.getenv(var)]
     
     if missing_vars:
-        print(f"❌ 缺少必要的環境變量: {', '.join(missing_vars)}")
+        print(f"❌ 缺少必要的環境變數: {', '.join(missing_vars)}")
         print("請檢查 .env 文件是否包含所有必要的配置")
         return
     
@@ -466,16 +429,11 @@ def main():
         print("💛 正在等待來自哈尼的訊息...")
         print("-" * 50)
         
-        # 啟動定期更新任務（選擇性）
-        # loop = asyncio.get_event_loop()
-        # loop.create_task(periodic_personality_update())
-        
         # 啟動機器人
         app.run_polling(drop_pending_updates=True)
         
     except Exception as e:
         print(f"❌ 機器人啟動失敗: {e}")
-        sentry_sdk.capture_exception(e)
 
 if __name__ == "__main__":
     main()
