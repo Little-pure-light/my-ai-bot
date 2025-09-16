@@ -748,12 +748,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """處理文件上傳"""
     user_id = str(update.message.from_user.id)
-    result = await file_handler.handle_document(update, context)
-if result["success"]:
-    await update.message.reply_text(result["message"])
-else:
-    await update.message.reply_text(f"處理失敗：{result['message']}")
-    
+    result = await file_handler.handle_file(update, context, user_id)
+    await update.message.reply_text(result)
   
     
 def main():
