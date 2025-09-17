@@ -84,8 +84,8 @@ class EnhancedEmotionDetector:
                 "intensity_multipliers": {"超級": 1.4, "非常": 1.3, "真的": 1.2, "好": 1.1}
             }
         }
-
-   def analyze_emotion(self, text: str) -> dict:
+    
+    def analyze_emotion(self, text: str) -> dict:
         """綜合情感分析"""
         if not text:
             return {"dominant_emotion": "neutral", "emotions": {}, "intensity": 0.5, "confidence": 0.0}
@@ -93,9 +93,7 @@ class EnhancedEmotionDetector:
         emotions_scores = {}
         text_lower = text.lower()
         
-               
-                text_lower = text.lower()
-        
+                                    
         # 基於關鍵詞的情感檢測
         for emotion, data in self.emotion_dictionary.items():
             score = 0
