@@ -816,10 +816,11 @@ def main():
     try:
         app = Application.builder().token(BOT_TOKEN).build()
         
+   
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        app.add_handler(MessageHandler(filters.Document, handle_document))
+        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # 這裡修正
 
         
         print("🎉 小宸光已經準備好了！")
