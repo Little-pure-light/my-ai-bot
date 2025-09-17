@@ -89,7 +89,8 @@ class EnhancedEmotionDetector:
         """綜合情感分析"""
         if not text:
             return {"dominant_emotion": "neutral", "emotions": {}, "intensity": 0.5, "confidence": 0.0}
-                emotions_scores = {}
+			    embotions_scores ={}
+               
                 text_lower = text.lower()
         
         # 基於關鍵詞的情感檢測
