@@ -1,3 +1,7 @@
+from app.handlers import text, files
+def register_handlers(dp):
+    text.register(dp)
+    files.register(dp)
 import os
 import json
 import random
@@ -28,6 +32,14 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # === 🎭 強化版情感識別系統 ===
 class EnhancedEmotionDetector:
+    def register_handlers(dp):
+    text.register(dp)
+    files.register(dp)
+
+def register_handlers(dp):
+    text.register(dp)
+    files.register(dp)
+
     def __init__(self):
         # 擴展的情感詞典
         self.emotion_dictionary = {
