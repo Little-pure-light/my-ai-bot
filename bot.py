@@ -100,7 +100,7 @@ class EnhancedEmotionDetector:
             for keyword in data["keywords"]:
                 if keyword.lower() in text_lower:
                     score += 1
-            
+             
             # 模式匹配
             for pattern in data.get("patterns", []):
                 if re.search(pattern, text):
