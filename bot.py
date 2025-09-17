@@ -5,12 +5,15 @@ import re
 from datetime import datetime
 import asyncio
 from telegram import Update
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
+from file_handler import handle_file, download_full_file
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from modules.file_handler import FileHandler
-file_handler = FileHandler()
+
+
+
 
 # 載入環境變量
 load_dotenv()
@@ -833,6 +836,8 @@ def main():
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
         app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # 這裡修正
+        app.add_handler(CallbackQueryHandler(download_full_file, pattern=r"^download_"))
+
 
         
         print("🎉 小宸光已經準備好了！")
