@@ -1,58 +1,94 @@
 import os
+import json
+import docx
+import io
+from PyPDF2 import PdfReader
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, InputFile
+
+# 支援的副檔名
+allowed_extensions = [".txt", ".md", ".json", ".py", ".docx", ".pdf"]
 
 async def handle_file(update, context, user_id):
+    document = update.message.document
+    file_name = document.file_name
+    file_ext = os.path.splitext(file_name)[-1].lower()
+
+    # 副檔名檢查
+    if file_ext not in allowed_extensions:
+        return f"⚠ 檔案格式 `{file_ext}` 不支援，目前支援：{', '.join(allowed_extensions)}"
+
     try:
-        document = update.message.document
-
-        # 1. 檔案基本資訊
-        print("=" * 50)
-        print(f"[DEBUG] 收到檔案事件 - from user: {user_id}")
-        print(f"[DEBUG] File name: {document.file_name}")
-        print(f"[DEBUG] MIME type: {document.mime_type}")
-        print(f"[DEBUG] File size: {document.file_size} bytes")
-
-        # 2. 下載檔案
-        tg_file = await context.bot.get_file(document.file_id)
-        file_path = f"/tmp/{document.file_name}"
-        await tg_file.download_to_drive(file_path)
-        print(f"[DEBUG] File saved to: {file_path}")
-
-        # 3. 確認檔案存在
-        if os.path.exists(file_path):
-            print("[DEBUG] File confirmed on disk ✅")
-        else:
-            print("[ERROR] File not found after download ❌")
-            return "📂 檔案下載失敗，請再試一次。"
-
-        # 4. 讀取檔案內容（依副檔名決定解析方式）
-        content = None
-        if document.file_name.lower().endswith(".txt"):
-            print("[DEBUG] Detected TXT file, opening...")
+        # 下載檔案到本地 temp 資料夾
+        os.makedirs("temp", exist_ok=True)
+        file_path = os.path.join("temp", file_name)
+        new_file = await document.get_file()
+        await new_file.download_to_drive(file_path)
+        
+        # 根據副檔名處理文字
+        if file_ext in [".txt", ".md", ".py", ".json"]:
             with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-            print(f"[DEBUG] TXT file content length: {len(content)}")
-        elif document.file_name.lower().endswith(".pdf"):
-            print("[DEBUG] Detected PDF file, parsing...")
-            from modules.pdf_parser import parse_pdf  # 假設你有 PDF 解析器
-            content = parse_pdf(file_path)
-            print(f"[DEBUG] PDF parsed content length: {len(content) if content else 0}")
+
+            # JSON 額外格式化
+            if file_ext == ".json":
+                try:
+                    content_json = json.loads(content)
+                    content = json.dumps(content_json, indent=4, ensure_ascii=False)
+                except Exception:
+                    pass  # 解析失敗就保持原文
+
+        elif file_ext == ".docx":
+            doc = docx.Document(file_path)
+            content = "\n".join([para.text for para in doc.paragraphs])
+
+        elif file_ext == ".pdf":
+            content = ""
+            with open(file_path, "rb") as f:
+                reader = PdfReader(f)
+                for page in reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        content += page_text
+
+        # 判斷是否需要預覽或完整檔案
+        if len(content) > 2000:
+            preview = content[:2000] + "...\n\n(內容過長，請使用按鈕下載完整文字)"
+            # 按鈕生成
+            keyboard = [
+                [InlineKeyboardButton("📥 下載完整檔案", callback_data=f"download_{file_name}")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+
+            # 存入 context.user_data，供回傳檔案用
+            context.user_data[f"file_{file_name}"] = content
+
+            await update.message.reply_text(
+                f"📄 檔案 **{file_name}** 上傳成功！\n內容預覽：\n```\n{preview}\n```",
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+            return None
         else:
-            print(f"[WARN] Unhandled file type: {document.file_name}")
-            return f"⚠ 我暫時不支援 {document.file_name} 這種檔案類型喔～"
-
-        # 5. AI 分析內容
-        if not content or len(content.strip()) == 0:
-            print("[ERROR] No content extracted from file ❌")
-            return "⚠ 檔案裡似乎沒有可以讀取的內容，請檢查檔案格式。"
-
-        print("[DEBUG] Sending content to AI for analysis...")
-        from modules.ai_handler import analyze_content_with_ai  # 假設的 AI 處理模組
-        ai_result = await analyze_content_with_ai(content, user_id)
-
-        print("[DEBUG] AI analysis completed ✅")
-        print("=" * 50)
-        return ai_result
+            return f"📄 檔案 **{file_name}** 上傳成功！\n內容預覽：\n```\n{content}\n```"
 
     except Exception as e:
-        print(f"[ERROR] handle_file failed: {e}")
-        return f"❌ 在處理檔案時發生錯誤：{e}"
+        return f"❌ 讀取檔案時發生錯誤: {e}"
+
+
+async def download_full_file(update, context):
+    """處理按下完整下載按鈕的回覆"""
+    query = update.callback_query
+    await query.answer()
+
+    file_name = query.data.replace("download_", "", 1)
+    content = context.user_data.get(f"file_{file_name}")
+
+    if content:
+        file_stream = io.BytesIO(content.encode("utf-8", errors="ignore"))
+        file_stream.name = file_name + ".txt"
+        await query.message.reply_document(
+            document=InputFile(file_stream, filename=file_stream.name),
+            caption=f"📎 這是檔案 **{file_name}** 的完整內容"
+        )
+    else:
+        await query.message.reply_text("⚠ 找不到檔案內容，請重新上傳。")
