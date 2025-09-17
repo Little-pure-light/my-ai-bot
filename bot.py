@@ -33,12 +33,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # === 🎭 強化版情感識別系統 ===
 class EnhancedEmotionDetector:
     def register_handlers(dp):
-    text.register(dp)
-    files.register(dp)
-
-def register_handlers(dp):
-    text.register(dp)
-    files.register(dp)
+        text.register(dp)
+        files.register(dp)
+ 
+    def register_handlers(dp):
+        text.register(dp)
+        files.register(dp)
 
     def __init__(self):
         # 擴展的情感詞典
@@ -86,7 +86,7 @@ def register_handlers(dp):
         }
 
     def analyze_emotion(self, text: str) -> dict:
-        """綜合情感分析"""
+       """綜合情感分析"""
         if not text:
             return {"dominant_emotion": "neutral", "emotions": {}, "intensity": 0.5, "confidence": 0.0}
         
