@@ -5,7 +5,6 @@ import re
 from datetime import datetime
 import asyncio
 from telegram import Update
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
