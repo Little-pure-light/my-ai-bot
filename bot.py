@@ -9,10 +9,8 @@ from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
 from telegram.ext import ContextTypes
-from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from modules.file_handler import handle_file, download_full_file
-
-
 # 載入環境變量
 load_dotenv()
 
