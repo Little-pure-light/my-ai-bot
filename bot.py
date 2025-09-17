@@ -9,6 +9,8 @@ from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
+from modules.file_handler import FileHandler
+file_handler = FileHandler()
 
 # 載入環境變量
 load_dotenv()
@@ -23,6 +25,8 @@ MEMORIES_TABLE = os.getenv("SUPABASE_MEMORIES_TABLE", "xiaochenguang_memories")
 # 初始化客戶端
 client = OpenAI(api_key=OPENAI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+
 
 # === 🎭 強化版情感識別系統 ===
 class EnhancedEmotionDetector:
@@ -663,10 +667,13 @@ async def traditional_search(user_id: str, query: str, limit: int = 3):
         return ""
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    # 處理圖片的程式碼
-
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    result_msg = await file_handler.handle_file(update, context, user_id)
+    await update.message.reply_text(result_msg)
+
+  
+
     document = update.message.document
     # 處理檔案的程式碼
 
@@ -815,6 +822,8 @@ def main():
     # 建立並啟動機器人
     try:
         app = Application.builder().token(BOT_TOKEN).build()
+       
+
         
    
         # 添加消息處理器
