@@ -662,6 +662,14 @@ async def traditional_search(user_id: str, query: str, limit: int = 3):
         print(f"❌ 傳統搜尋失敗：{e}")
         return ""
 
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo = update.message.photo[-1]
+    # 處理圖片的程式碼
+
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    document = update.message.document
+    # 處理檔案的程式碼
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """處理訊息（強化情感識別版）"""
     try:
@@ -810,6 +818,9 @@ def main():
         
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        app.add_handler(MessageHandler(filters.DOCUMENT, handle_document))
+
         
         print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
