@@ -5,13 +5,11 @@ import re
 from datetime import datetime
 import asyncio
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from modules.file_handler import FileHandler
-file_handler = FileHandler()
-
+from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
+from file_handler import handle_file, download_full_file
 
 
 # 載入環境變量
