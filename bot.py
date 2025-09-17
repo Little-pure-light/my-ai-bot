@@ -85,11 +85,14 @@ class EnhancedEmotionDetector:
             }
         }
 
-    def analyze_emotion(self, text: str) -> dict:
+   def analyze_emotion(self, text: str) -> dict:
         """綜合情感分析"""
         if not text:
             return {"dominant_emotion": "neutral", "emotions": {}, "intensity": 0.5, "confidence": 0.0}
-			    embotions_scores ={}
+        
+        emotions_scores = {}
+        text_lower = text.lower()
+        
                
                 text_lower = text.lower()
         
