@@ -672,10 +672,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 這裡是處理照片的原有邏輯
     pass  # 如果你有舊的 handle_photo 程式碼，替換掉這行
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    result_msg = await file_handler.handle_file(update, context, user_id)
+async def handle_document(update, context):
+    user_id = update.message.from_user.id
+    result_msg = await handle_file(update, context, user_id)  # ✅ 新方法
     await update.message.reply_text(result_msg)
+
 
 
   
