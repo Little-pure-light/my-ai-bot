@@ -673,6 +673,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pass  # 如果你有舊的 handle_photo 程式碼，替換掉這行
 
 async def handle_document(update, context):
+    print("[DEBUG] 收到文件事件！")
     user_id = update.message.from_user.id
     result_msg = await handle_file(update, context, user_id)  # ✅ 新方法
     await update.message.reply_text(result_msg)
@@ -852,6 +853,8 @@ def main():
         
     except Exception as e:
         print(f"❌ 機器人啟動失敗: {e}")
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+
 
 if __name__ == "__main__":
     main()
