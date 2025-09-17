@@ -13,3 +13,13 @@ app/
   utils/
     paths.py             # 產生安全路徑（/tmp）
 requirements.txt
+
+import os
+
+class Settings:
+    BOT_TOKEN = os.getenv("_BOT_TOKEN")
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+    OPENAI_TEXT_MODEL = os.getenv("OPENAI_TEXT_MODEL", "gpt-4o-mini")
+    OPENAI_VISION_MODEL = os.getenv("OPENAI_VISION_MODEL", "gpt-4o-mini")
+
+settings = Settings()
