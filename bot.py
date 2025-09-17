@@ -6,7 +6,7 @@ from datetime import datetime
 import asyncio
 from telegram import Update
 from telegram.ext import ApplicationBuilder, MessageHandler, CallbackQueryHandler, filters
-from modules.file_handler import handle_file
+from modules.file_handler import handle_file, download_full_file
 from telegram.ext import Application, MessageHandler, filters, ContextTypes
 from openai import OpenAI, APIError
 from supabase import create_client, Client
@@ -672,12 +672,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 這裡是處理照片的原有邏輯
     pass  # 如果你有舊的 handle_photo 程式碼，替換掉這行
 
-async def handle_document(update, context):
-    print("[DEBUG] 收到文件事件！")
-    user_id = update.message.from_user.id
-    result_msg = await handle_file(update, context, user_id)  # ✅ 新方法
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = str(update.effective_user.id)
+    result_msg = await file_handler.handle_file(update, context, user_id)
     await update.message.reply_text(result_msg)
-
 
 
   
@@ -853,8 +851,6 @@ def main():
         
     except Exception as e:
         print(f"❌ 機器人啟動失敗: {e}")
-    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
-
 
 if __name__ == "__main__":
     main()
