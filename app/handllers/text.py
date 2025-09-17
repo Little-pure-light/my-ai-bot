@@ -1,6 +1,9 @@
-from telegram import Update
-from telegram.ext import CallbackContext
+from aiogram import types, Dispatcher
 
-def handle_text(update: Update, context: CallbackContext):
-    user_text = update.message.text
-    update.message.reply_text(f"你說了：{user_text}")
+# 處理一般文字訊息
+async def handle_text(message: types.Message):
+    await message.answer(f"收到文字訊息：{message.text}")
+
+# 註冊
+def register(dp: Dispatcher):
+    dp.register_message_handler(handle_text, content_types=['text'])
