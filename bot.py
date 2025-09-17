@@ -8,7 +8,7 @@ from telegram import Update
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from telegram.ext import Application, ApplicationBuilder, CallbackQueryHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes
 
 from modules.file_handler import handle_file, download_full_file
 # 載入環境變量
@@ -823,11 +823,9 @@ def main():
     
     # 建立並啟動機器人
     try:
-        app = Application.builder().token(BOT_TOKEN).build()
-       
+        app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-        
-   
+          
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
