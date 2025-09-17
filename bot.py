@@ -86,12 +86,11 @@ class EnhancedEmotionDetector:
         }
 
     def analyze_emotion(self, text: str) -> dict:
-       """綜合情感分析"""
+        """綜合情感分析"""
         if not text:
             return {"dominant_emotion": "neutral", "emotions": {}, "intensity": 0.5, "confidence": 0.0}
-        
-        emotions_scores = {}
-        text_lower = text.lower()
+                emotions_scores = {}
+                text_lower = text.lower()
         
         # 基於關鍵詞的情感檢測
         for emotion, data in self.emotion_dictionary.items():
