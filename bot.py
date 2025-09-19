@@ -1,7 +1,3 @@
-from app.handllers import text, files
-def register_handlers(dp):
-    text.register(dp)
-    files.register(dp)
 import os
 import json
 import random
@@ -12,7 +8,7 @@ from telegram import Update
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from telegram.ext import MessageHandler, filters
+from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from modules.file_handler import handle_file, download_full_file
 # 載入環境變量
 load_dotenv()
@@ -32,14 +28,6 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # === 🎭 強化版情感識別系統 ===
 class EnhancedEmotionDetector:
-    def register_handlers(dp):
-        text.register(dp)
-        files.register(dp)
- 
-    def register_handlers(dp):
-        text.register(dp)
-        files.register(dp)
-
     def __init__(self):
         # 擴展的情感詞典
         self.emotion_dictionary = {
@@ -84,7 +72,7 @@ class EnhancedEmotionDetector:
                 "intensity_multipliers": {"超級": 1.4, "非常": 1.3, "真的": 1.2, "好": 1.1}
             }
         }
-    
+
     def analyze_emotion(self, text: str) -> dict:
         """綜合情感分析"""
         if not text:
@@ -93,7 +81,6 @@ class EnhancedEmotionDetector:
         emotions_scores = {}
         text_lower = text.lower()
         
-                                    
         # 基於關鍵詞的情感檢測
         for emotion, data in self.emotion_dictionary.items():
             score = 0
@@ -102,7 +89,7 @@ class EnhancedEmotionDetector:
             for keyword in data["keywords"]:
                 if keyword.lower() in text_lower:
                     score += 1
-             
+            
             # 模式匹配
             for pattern in data.get("patterns", []):
                 if re.search(pattern, text):
@@ -836,9 +823,15 @@ def main():
     # 建立並啟動機器人
     try:
         app = ApplicationBuilder().token(BOT_TOKEN).build()
-        register_handlers(app)       
+
+          
+        # 添加消息處理器
+        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # 這裡修正
         app.add_handler(CallbackQueryHandler(download_full_file, pattern=r"^download_"))
-               
+
+
         
         print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
