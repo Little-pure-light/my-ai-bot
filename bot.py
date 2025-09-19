@@ -669,9 +669,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = str(update.effective_user.id)
-    result_msg = await file_handler.handle_file(update, context, user_id)
+    result_msg = await handle_file(update, context, user_id)  # 修正為 handle_file (移除 file_handler.)
     await update.message.reply_text(result_msg)
-
 
   
 
