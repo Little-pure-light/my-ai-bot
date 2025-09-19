@@ -836,12 +836,7 @@ def main():
     # 建立並啟動機器人
     try:
         app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-          
-        # 添加消息處理器
-        app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
-        app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # 這裡修正
+        register_handlers(app)       
         app.add_handler(CallbackQueryHandler(download_full_file, pattern=r"^download_"))
 
 
