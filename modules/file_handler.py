@@ -10,6 +10,7 @@ load_dotenv()  # 載入環境變數
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+BUCKET_NAME = "xiaochenguang"  # 替換為您創建的 bucket 名稱
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
@@ -58,3 +59,4 @@ async def download_full_file(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("下載功能正在開發中...")
+
