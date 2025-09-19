@@ -25,15 +25,15 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_i
     os.makedirs("/tmp", exist_ok=True)
 
     try:
-        # 異步下載
+        # 異步下載文件
         file_obj = await context.bot.get_file(document.file_id)
         await file_obj.download_to_drive(file_path)
         await update.message.reply_text(f"✅ 檔案已下載: {document.file_name}")
 
         # 上傳到 Supabase
         with open(file_path, "rb") as f:
-            supabase.storage.from_("your-bucket-name").upload(f"users/{user_id}/{document.file_name}", f)  # 替換 bucket 名稱
-        await update.message.reply_text("📤 已上傳到 Supabase")
+            supabase.storage.from_(BUCKET_NAME).upload(f"users/{user_id}/{document.file_name}", f)
+        await update.message.reply_text(f"📤 檔案已上傳到 Supabase bucket: {BUCKET_NAME}")
 
         # OpenAI 處理（範例：摘要文件）
         with open(file_path, "rb") as f:
@@ -53,10 +53,8 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_i
         if os.path.exists(file_path):
             os.remove(file_path)
 
-# 如果有 download_full_file，請定義它（或移除 bot.py 中的導入）
+# 保留 download_full_file（如果需要）
 async def download_full_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 您的原有邏輯，例如處理下載按鈕
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("下載功能正在開發中...")
-
