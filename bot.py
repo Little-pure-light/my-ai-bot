@@ -1,4 +1,4 @@
-from app.handlers import text, files
+from app.handllers import text, files
 def register_handlers(dp):
     text.register(dp)
     files.register(dp)
