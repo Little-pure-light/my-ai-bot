@@ -6,4 +6,6 @@ google-generativeai
 python-dotenv
 python-docx
 PyPDF2
+aiogram==3.22.0
+
 
