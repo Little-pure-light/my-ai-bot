@@ -6,4 +6,4 @@ google-generativeai
 python-dotenv
 python-docx
 PyPDF2
-pip install aiogram
+
