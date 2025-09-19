@@ -5,13 +5,12 @@ from handlers.text import handle_text
 from .handllers import files
 dp.add_handler(MessageHandler(filters.Document.ALL, files.handle_file))
 
-def register_handlers(dp):
+def register_handlers(application: Application):
     # 文件上傳
-    dp.add_handler(MessageHandler(Filters.document, handle_file))
+    application.add_handler(MessageHandler(filters.Document.ALL, files.handle_file))
     # 圖片上傳
-    dp.add_handler(MessageHandler(Filters.photo, handle_file))
-    # 文字訊息
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, handle_text))
+    application.add_handler(MessageHandler(filters.PHOTO, files.handle_image))
+
 
 
 
