@@ -1,58 +1,57 @@
 import os
+import requests  # 添加以支援 OpenAI 文件上傳（如果需要）
+from telegram import Update
+from telegram.ext import ContextTypes
+from supabase import create_client, Client  # 如果在 bot.py 中已定義，可全局使用
+from openai import OpenAI  # 同上
 
-async def handle_file(update, context, user_id):
+# 假設從環境變數載入（或從 bot.py 傳入）
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str = None):
+    document = update.message.document
+    if not document:
+        await update.message.reply_text("❌ 沒有收到檔案")
+        return "沒有收到檔案"
+
+    file_path = os.path.join("/tmp", document.file_name)
+    os.makedirs("/tmp", exist_ok=True)  # 確保暫存目錄存在
+
     try:
-        document = update.message.document
+        # 異步獲取並下載文件
+        file_obj = await context.bot.get_file(document.file_id)
+        await file_obj.download_to_drive(file_path)
+        await update.message.reply_text(f"✅ 檔案已下載到 {file_path}")
 
-        # 1. 檔案基本資訊
-        print("=" * 50)
-        print(f"[DEBUG] 收到檔案事件 - from user: {user_id}")
-        print(f"[DEBUG] File name: {document.file_name}")
-        print(f"[DEBUG] MIME type: {document.mime_type}")
-        print(f"[DEBUG] File size: {document.file_size} bytes")
+        # (可選) 上傳到 Supabase 儲存
+        with open(file_path, "rb") as f:
+            supabase.storage.from_("your-bucket-name").upload(f"users/{user_id}/{document.file_name}", f)  # 替換 your-bucket-name
+        await update.message.reply_text("📤 檔案已上傳到 Supabase")
 
-        # 2. 下載檔案
-        tg_file = await context.bot.get_file(document.file_id)
-        file_path = f"/tmp/{document.file_name}"
-        await tg_file.download_to_drive(file_path)
-        print(f"[DEBUG] File saved to: {file_path}")
+        # (可選) 使用 OpenAI 處理文件（例如上傳並分析內容）
+        with open(file_path, "rb") as f:
+            openai_file = openai_client.files.create(file=f, purpose="assistants")
+        # 示例：使用模型分析文件內容
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "user", "content": f"請摘要這個文件: {openai_file.id}"}],
+            max_tokens=500
+        ).choices[0].message.content
+        await update.message.reply_text(f"🧠 OpenAI 分析結果：\n{response}")
 
-        # 3. 確認檔案存在
-        if os.path.exists(file_path):
-            print("[DEBUG] File confirmed on disk ✅")
-        else:
-            print("[ERROR] File not found after download ❌")
-            return "📂 檔案下載失敗，請再試一次。"
-
-        # 4. 讀取檔案內容（依副檔名決定解析方式）
-        content = None
-        if document.file_name.lower().endswith(".txt"):
-            print("[DEBUG] Detected TXT file, opening...")
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            print(f"[DEBUG] TXT file content length: {len(content)}")
-        elif document.file_name.lower().endswith(".pdf"):
-            print("[DEBUG] Detected PDF file, parsing...")
-            from modules.pdf_parser import parse_pdf  # 假設你有 PDF 解析器
-            content = parse_pdf(file_path)
-            print(f"[DEBUG] PDF parsed content length: {len(content) if content else 0}")
-        else:
-            print(f"[WARN] Unhandled file type: {document.file_name}")
-            return f"⚠ 我暫時不支援 {document.file_name} 這種檔案類型喔～"
-
-        # 5. AI 分析內容
-        if not content or len(content.strip()) == 0:
-            print("[ERROR] No content extracted from file ❌")
-            return "⚠ 檔案裡似乎沒有可以讀取的內容，請檢查檔案格式。"
-
-        print("[DEBUG] Sending content to AI for analysis...")
-        from modules.ai_handler import analyze_content_with_ai  # 假設的 AI 處理模組
-        ai_result = await analyze_content_with_ai(content, user_id)
-
-        print("[DEBUG] AI analysis completed ✅")
-        print("=" * 50)
-        return ai_result
-
+        return "文件處理完成！"
     except Exception as e:
-        print(f"[ERROR] handle_file failed: {e}")
-        return f"❌ 在處理檔案時發生錯誤：{e}"
+        await update.message.reply_text(f"❌ 檔案處理失敗: {str(e)}")
+        return f"錯誤: {str(e)}"
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)  # 清理暫存文件
+
+# 如果有 download_full_file，保留原樣
+def download_full_file(...):  # 您的原有邏輯
+    pass
