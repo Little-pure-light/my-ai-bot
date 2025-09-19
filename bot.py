@@ -12,7 +12,7 @@ from telegram import Update
 from openai import OpenAI, APIError
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes, MessageHandler, filters
+from telegram.ext import MessageHandler, filters
 from modules.file_handler import handle_file, download_full_file
 # 載入環境變量
 load_dotenv()
@@ -838,8 +838,7 @@ def main():
         app = ApplicationBuilder().token(BOT_TOKEN).build()
         register_handlers(app)       
         app.add_handler(CallbackQueryHandler(download_full_file, pattern=r"^download_"))
-
-
+               
         
         print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
