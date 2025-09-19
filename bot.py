@@ -10,6 +10,8 @@ from supabase import create_client, Client
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 from modules.file_handler import handle_file, download_full_file
+import sys
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))  # 確保當前目錄在路徑中
 # 載入環境變量
 load_dotenv()
 
