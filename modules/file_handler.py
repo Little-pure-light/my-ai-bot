@@ -17,13 +17,13 @@ BUCKET_NAME = "xiaochenguang"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_id: str = None):
+async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, conversation_id: str = None):
     document = update.message.document
     if not document:
         await update.message.reply_text("❌ 沒有收到檔案")
         return "沒有收到檔案"
 
-    file_path = os.path.join("temp", f"{user_id}_{document.file_name}")  # 改為 temp，避免 /tmp 權限問題
+    file_path = os.path.join("temp", f"{conversation_id}_{document.file_name}")  # 改為 temp，避免 /tmp 權限問題
     os.makedirs("temp", exist_ok=True)
 
     try:
@@ -52,7 +52,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_i
 
         # 上傳到 Supabase Storage
         with open(file_path, "rb") as f:
-            supabase.storage.from_(BUCKET_NAME).upload(f"users/{user_id}/{document.file_name}", f)
+            supabase.storage.from_(BUCKET_NAME).upload(f"users/{conversation_id}/{document.file_name}", f)
         await update.message.reply_text(f"📤 檔案已上傳到 Supabase bucket: {BUCKET_NAME}")
 
         # OpenAI 摘要
@@ -65,7 +65,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, user_i
 
         # 儲存到資料表
         supabase.table("xiaochenguang_memories").insert({
-            "user_id": user_id,
+            "conversation_id": conversation_id,
             "file_name": document.file_name,
             "document_content": file_content,
             "created_at": "now()",
