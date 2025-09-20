@@ -325,8 +325,8 @@ class XiaoChenGuangSoul:
         return personality_prompt
 
 class PersonalityEngine:
-    def __init__(self, user_id):
-        self.user_id = user_id
+    def __init__(self, conversation_id):
+        self.conversation_id = conversation_id
         self.personality_traits = {
             "curiosity": 0.5,
             "empathy": 0.5,
@@ -348,7 +348,7 @@ class PersonalityEngine:
         try:
             result = supabase.table(MEMORIES_TABLE)\
                 .select("*")\
-                .eq("conversation_id", self.user_id)\
+                .eq("conversation_id", self.conversation_id)\
                 .eq("memory_type", "personality")\
                 .execute()
             
@@ -362,7 +362,7 @@ class PersonalityEngine:
             try:
                 personality_result = supabase.table("user_preferences")\
                     .select("personality_profile")\
-                    .eq("user_id", self.user_id)\
+                    .eq("conversation_id", self.conversation_id)\
                     .execute()
                 
                 if personality_result.data and personality_result.data[0].get('personality_profile'):
@@ -381,7 +381,7 @@ class PersonalityEngine:
         """保存個性到Supabase"""
         try:
             data = {
-                "conversation_id": self.user_id,
+                "conversation_id": self.conversation_id,
                 "memory_type": "personality",
                 "document_content": json.dumps({
                     "traits": self.personality_traits,
@@ -564,7 +564,7 @@ class PersonalityEngine:
         return combined_prompt
 
 # 記憶管理函數
-async def add_to_memory(user_id: str, user_input: str, bot_response: str):
+async def add_to_memory(conversation_id: str, user_input: str, bot_response: str):
     """添加對話到記憶庫"""
     try:
         embedding_response = client.embeddings.create(
@@ -574,7 +574,7 @@ async def add_to_memory(user_id: str, user_input: str, bot_response: str):
         embedding = embedding_response.data[0].embedding
         
         data = {
-            "conversation_id": user_id,
+            "conversation_id": conversation_id,
             "user_message": user_input,
             "assistant_message": bot_response,
             "embedding": embedding,
@@ -585,17 +585,17 @@ async def add_to_memory(user_id: str, user_input: str, bot_response: str):
         }
         
         supabase.table(MEMORIES_TABLE).insert(data).execute()
-        print(f"✅ 記憶已儲存 - 用戶: {user_id[:8]}...")
+        print(f"✅ 記憶已儲存 - 用戶: {conversation_id[:8]}...")
         
     except Exception as e:
         print(f"❌ 儲存記憶失敗：{e}")
 
-def get_conversation_history(user_id: str, limit: int = 10):
+def get_conversation_history(conversation_id: str, limit: int = 10):
     """獲取對話歷史"""
     try:
         result = supabase.table(MEMORIES_TABLE)\
             .select("user_message, assistant_message, created_at")\
-            .eq("conversation_id", user_id)\
+            .eq("conversation_id", conversation_id)\
             .eq("memory_type", "conversation")\
             .order("created_at", desc=True)\
             .limit(limit)\
@@ -613,7 +613,7 @@ def get_conversation_history(user_id: str, limit: int = 10):
         print(f"❌ 獲取歷史失敗：{e}")
         return ""
 
-async def search_relevant_memories(user_id: str, query: str, limit: int = 3):
+async def search_relevant_memories(conversation_id: str, query: str, limit: int = 3):
     """搜尋相關記憶"""
     try:
         embedding_response = client.embeddings.create(
@@ -625,7 +625,7 @@ async def search_relevant_memories(user_id: str, query: str, limit: int = 3):
         result = supabase.rpc('match_memories', {
             'query_embedding': query_embedding,
             'match_count': limit,
-            'user_id': user_id
+            'conversation_id': conversation_id
         }).execute()
         
         if result.data:
@@ -637,14 +637,14 @@ async def search_relevant_memories(user_id: str, query: str, limit: int = 3):
         
     except Exception as e:
         print(f"❌ 搜尋記憶失敗：{e}")
-        return await traditional_search(user_id, query, limit)
+        return await traditional_search(conversation_id, query, limit)
 
-async def traditional_search(user_id: str, query: str, limit: int = 3):
+async def traditional_search(conversation_id: str, query: str, limit: int = 3):
     """傳統文字搜尋（備用方案）"""
     try:
         result = supabase.table(MEMORIES_TABLE)\
             .select("user_message, assistant_message")\
-            .eq("conversation_id", user_id)\
+            .eq("conversation_id", conversation_id)\
             .eq("memory_type", "conversation")\
             .limit(limit * 2)\
             .execute()
@@ -670,8 +670,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pass  # 如果你有舊的 handle_photo 程式碼，替換掉這行
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = str(update.effective_user.id)
-    result_msg = await handle_file(update, context, user_id)  # 修正為 handle_file (移除 file_handler.)
+    conversation_id = str(update.effective_user.id)
+    result_msg = await handle_file(update, context, conversation_id)  # 修正為 handle_file (移除 file_handler.)
     await update.message.reply_text(result_msg)
 
   
@@ -683,10 +683,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """處理訊息（強化情感識別版）"""
     try:
         user_input = update.message.text
-        user_id = str(update.message.from_user.id)
+        conversation_id = str(update.message.from_user.id)
         
         # 初始化系統組件
-        personality_engine = PersonalityEngine(user_id)
+        personality_engine = PersonalityEngine(conversation_id)
         xiaochenguang_soul = XiaoChenGuangSoul()
         emotion_detector = EnhancedEmotionDetector()
         
@@ -695,10 +695,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"🎭 情感分析結果: {emotion_analysis['dominant_emotion']} (強度: {emotion_analysis['intensity']:.2f})")
         
         # 獲取歷史對話
-        history = get_conversation_history(user_id, limit=5)
+        history = get_conversation_history(conversation_id, limit=5)
         
         # 搜尋相關記憶
-        relevant_memories = await search_relevant_memories(user_id, user_input, limit=3)
+        relevant_memories = await search_relevant_memories(conversation_id, user_input, limit=3)
         
         # 生成結合情感分析的動態提示
         combined_personality = personality_engine.generate_combined_prompt(xiaochenguang_soul, emotion_analysis)
@@ -734,7 +734,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response)
 
         # 儲存記憶
-        await add_to_memory(user_id, user_input, response)
+        await add_to_memory(conversation_id, user_input, response)
         
         # 學習成長（包含情感分析）
         personality_engine.learn_from_interaction(user_input, response, emotion_analysis)
