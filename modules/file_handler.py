@@ -59,7 +59,7 @@ async def handle_file(update: Update, context: ContextTypes.DEFAULT_TYPE, conver
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": f"請摘要此文件內容：\n\n{file_content}"}],
-            max_tokens=600
+            max_tokens=300
         ).choices[0].message.content
         await update.message.reply_text(f"🧠 分析結果：\n{response}")
 
@@ -84,5 +84,6 @@ async def download_full_file(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     await query.edit_message_text("下載功能正在開發中...")
+
 
 
