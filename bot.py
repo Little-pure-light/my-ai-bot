@@ -696,9 +696,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 獲取歷史對話
         history = get_conversation_history(conversation_id, limit=5)
-        
-        # 搜尋相關記憶
-        relevant_memories = await search_relevant_memories(conversation_id, user_input, limit=3)
+                     
         
         # 生成結合情感分析的動態提示
         combined_personality = personality_engine.generate_combined_prompt(xiaochenguang_soul, emotion_analysis)
