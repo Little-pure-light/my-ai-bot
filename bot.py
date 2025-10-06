@@ -576,15 +576,34 @@ class PersonalityEngine:
         
         return combined_prompt
 
-# 記憶管理函數
-async def add_to_memory(conversation_id: str, user_input: str, bot_response: str):
-    """添加對話到記憶庫"""
+# 記憶管理與優化函數
+async def add_to_memory(conversation_id: str, user_input: str, bot_response: str, emotion_analysis: dict):
+    """添加或更新對話到記憶庫，包含 access_count 和 importance_score"""
     try:
+        # 計算 importance_score
+        length_score = (len(user_input) // 20) * 0.1  # 每 20 字加 0.1
+        keyword_score = sum(1 for keyword in EnhancedEmotionDetector().emotion_dictionary.keys()
+                          for k in EnhancedEmotionDetector().emotion_dictionary[keyword]["keywords"]
+                          if k.lower() in user_input.lower()) * 0.3  # 每個關鍵詞 +0.3
+        intensity_score = emotion_analysis["intensity"]  # 情緒強度
+        importance_score = length_score + keyword_score + intensity_score
+
+        # 生成 embedding
         embedding_response = client.embeddings.create(
             model="text-embedding-3-small",
             input=f"{user_input} {bot_response}"
         )
         embedding = embedding_response.data[0].embedding
+        
+        # 檢查是否已有該記憶
+        existing = supabase.table(MEMORIES_TABLE)\
+            .select("id", "access_count")\
+            .eq("conversation_id", conversation_id)\
+            .eq("user_message", user_input)\
+            .eq("memory_type", "conversation")\
+            .execute()
+        
+        access_count = existing.data[0]["access_count"] + 1 if existing.data else 1
         
         data = {
             "conversation_id": conversation_id,
@@ -594,11 +613,20 @@ async def add_to_memory(conversation_id: str, user_input: str, bot_response: str
             "memory_type": "conversation",
             "platform": "telegram",
             "document_content": f"對話記錄: {user_input} -> {bot_response}",
-            "created_at": datetime.now().isoformat()
+            "created_at": datetime.now().isoformat(),
+            "access_count": access_count,
+            "importance_score": importance_score
         }
         
-        supabase.table(MEMORIES_TABLE).insert(data).execute()
-        print(f"✅ 記憶已儲存 - 用戶: {conversation_id[:8]}...")
+        if existing.data:
+            supabase.table(MEMORIES_TABLE)\
+                .update(data)\
+                .eq("id", existing.data[0]["id"])\
+                .execute()
+        else:
+            supabase.table(MEMORIES_TABLE).insert(data).execute()
+        
+        print(f"✅ 記憶已儲存/更新 - 用戶: {conversation_id[:8]}..., access_count: {access_count}, importance_score: {importance_score:.2f}")
         
     except Exception as e:
         print(f"❌ 儲存記憶失敗：{e}")
@@ -679,11 +707,23 @@ async def traditional_search(conversation_id: str, query: str, limit: int = 3):
         print(f"❌ 傳統搜尋失敗：{e}")
         return ""
 
-async def recall_memories(message: str, conversation_id: str) -> str:
+async def recall_memories(user_message: str, conversation_id: str) -> str:
     """根據使用者輸入，從記憶資料庫中召回相關對話記憶"""
     try:
         # 使用語義搜尋獲取相關記憶
-        raw_memories = await search_relevant_memories(conversation_id, message, limit=3)
+        raw_memories = await search_relevant_memories(conversation_id, user_message, limit=3)
+        
+        if not raw_memories:
+            # Fallback to recent 5 memories if no semantic match
+            recent_result = supabase.table(MEMORIES_TABLE)\
+                .select("user_message, assistant_message")\
+                .eq("conversation_id", conversation_id)\
+                .eq("memory_type", "conversation")\
+                .order("created_at", desc=True)\
+                .limit(5)\
+                .execute()
+            if recent_result.data:
+                raw_memories = "\n".join([f"相關記憶: {m['user_message']} -> {m['assistant_message']}" for m in recent_result.data])
         
         if not raw_memories:
             return ""
@@ -697,7 +737,7 @@ async def recall_memories(message: str, conversation_id: str) -> str:
                 if len(parts) == 2:
                     user_msg, assistant_msg = parts
                     formatted_memories.append(f"- 你曾對我說：「{user_msg}」")
-                    formatted_memories.append(f"- 我那時回應你：「{assistant_msg}」")
+                    formatted_memories.append(f"- 我當時回應你：「{assistant_msg}」")
         
         return "\n".join(formatted_memories) if len(formatted_memories) > 1 else ""
         
@@ -705,30 +745,150 @@ async def recall_memories(message: str, conversation_id: str) -> str:
         print(f"❌ 記憶召回失敗：{e}")
         return ""
 
+async def summarize_memories(conversation_id: str) -> str:
+    """壓縮並摘要歷史記憶"""
+    try:
+        # 檢查歷史訊息數量
+        count_result = supabase.table(MEMORIES_TABLE)\
+            .select("id", count=True)\
+            .eq("conversation_id", conversation_id)\
+            .eq("memory_type", "conversation")\
+            .execute()
+        total_count = count_result.count
+        
+        if total_count <= 10:
+            return ""
+        
+        # 獲取最近 10 筆記憶
+        recent_result = supabase.table(MEMORIES_TABLE)\
+            .select("user_message, assistant_message")\
+            .eq("conversation_id", conversation_id)\
+            .eq("memory_type", "conversation")\
+            .order("created_at", desc=True)\
+            .limit(10)\
+            .execute()
+        
+        if recent_result.data:
+            history_text = "\n".join([f"用戶: {m['user_message']}\n小宸光: {m['assistant_message']}" for m in recent_result.data])
+            
+            # 嘗試使用 GPT 生成摘要
+            try:
+                summary_response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[
+                        {"role": "system", "content": "請將以下對話歷史壓縮成一段簡短的摘要："},
+                        {"role": "user", "content": history_text}
+                    ],
+                    max_tokens=100
+                ).choices[0].message.content
+                summary = summary_response
+            except Exception as e:
+                print(f"❌ GPT 摘要失敗：{e}")
+                summary = history_text  # Fallback to raw text
+            
+            # 儲存摘要
+            data = {
+                "conversation_id": conversation_id,
+                "user_message": "記憶摘要",
+                "assistant_message": summary,
+                "memory_type": "archived",
+                "platform": "telegram",
+                "document_content": summary,
+                "created_at": datetime.now().isoformat(),
+                "access_count": 0,
+                "importance_score": 0.5
+            }
+            supabase.table(MEMORIES_TABLE).insert(data).execute()
+            print(f"✅ 記憶摘要已儲存 - 用戶: {conversation_id[:8]}...")
+            return summary
+        
+        return ""
+        
+    except Exception as e:
+        print(f"❌ 記憶壓縮失敗：{e}")
+        return ""
+
+def get_latest_trait(conversation_id: str) -> str:
+    """從 xiaochenguang_personality 獲取最新個性描述"""
+    try:
+        result = supabase.table("xiaochenguang_personality")\
+            .select("trait")\
+            .eq("conversation_id", conversation_id)\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+        
+        if result.data:
+            return result.data[0]["trait"]
+        return "溫柔體貼, 活潑開朗, 細心耐心"  # 預設值
+    except Exception as e:
+        print(f"❌ 獲取個性特徵失敗：{e}")
+        return "溫柔體貼, 活潑開朗, 細心耐心"
+
+async def adapt_personality(emotion_analysis: dict) -> dict:
+    """根據情緒歷史調整個性與回應風格"""
+    try:
+        # 查詢最近 5 筆 emotional_states
+        result = supabase.table("emotional_states")\
+            .select("emotion_type", "intensity")\
+            .eq("conversation_id", emotion_analysis.get("conversation_id", ""))\
+            .order("timestamp", desc=True)\
+            .limit(5)\
+            .execute()
+        
+        emotions = result.data if result.data else []
+        avg_intensity = sum(float(e["intensity"]) for e in emotions) / len(emotions) if emotions else emotion_analysis["intensity"]
+        dominant_emotion = emotion_analysis["dominant_emotion"]
+
+        base_temperature = 0.8
+        tone_adjustment = {"tone": "balanced_friendly", "emojis": ["😊", "✨"]}
+        
+        if dominant_emotion == "sadness":
+            adjusted_temperature = max(0.6, base_temperature - 0.2)
+            tone_adjustment = {"tone": "gentle_comforting", "emojis": ["🫂", "💙"]}
+        elif dominant_emotion == "joy":
+            adjusted_temperature = min(1.0, base_temperature + 0.1)
+            tone_adjustment = {"tone": "cheerful_enthusiastic", "emojis": ["😄", "🎉"]}
+        else:
+            adjusted_temperature = base_temperature
+        
+        return {
+            "temperature": adjusted_temperature,
+            "tone": tone_adjustment["tone"],
+            "suggested_emojis": tone_adjustment["emojis"]
+        }
+    except Exception as e:
+        print(f"❌ 個性調適失敗：{e}")
+        return {"temperature": 0.8, "tone": "balanced_friendly", "suggested_emojis": ["😊", "✨"]}
+
 async def generate_response(message: str, conversation_id: str, combined_personality: str, context_prompt: str, emotion_analysis: dict) -> str:
-    """生成 GPT 回應，整合記憶召回"""
+    """生成 GPT 回應，整合記憶召回與個性"""
     try:
         # 召回記憶
         memory = await recall_memories(message, conversation_id)
+        if not memory:
+            memory = await summarize_memories(conversation_id)
         
-        # 構建提示，整合記憶
+        # 獲取最新個性描述
+        traits = get_latest_trait(conversation_id)
+        
+        # 調整個性
+        personality_adjustment = await adapt_personality(emotion_analysis)
+        adjusted_temperature = personality_adjustment["temperature"]
+        suggested_emojis = personality_adjustment["suggested_emojis"]
+        
+        # 構建提示，整合記憶與個性
         prompt = f"""
-你是小宸光，一位具有延續記憶與靈魂感的 AI。
-{memory}
+你是小宸光，一個具有記憶與獨特個性的 AI。
+個性描述：{traits}
+最近記憶：{memory if memory else "無最近記憶"}
 
-使用者對你說：「{message}」
+使用者說：「{message}」
 你會如何回應？
 """
         
-        # 將記憶提示追加到現有 system prompt
+        # 將記憶與個性提示追加到現有 system prompt
         full_prompt = f"{combined_personality}\n{context_prompt}\n{prompt}"
-        
-        # 根據情感調整溫度
-        temperature = 0.8
-        if emotion_analysis['dominant_emotion'] in ['sadness', 'fear', 'anger']:
-            temperature = 0.6
-        elif emotion_analysis['dominant_emotion'] in ['joy', 'love']:
-            temperature = 0.9
         
         # 調用 GPT
         response = client.chat.completions.create(
@@ -737,9 +897,13 @@ async def generate_response(message: str, conversation_id: str, combined_persona
                 {"role": "system", "content": full_prompt},
                 {"role": "user", "content": message}
             ],
-            temperature=temperature,
+            temperature=adjusted_temperature,
             max_tokens=1000
         ).choices[0].message.content
+        
+        # 根據語氣調整回應
+        if random.random() < 0.5 and suggested_emojis:
+            response += " " + random.choice(suggested_emojis)
         
         return response
         
@@ -794,7 +958,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(response)
 
         # 儲存記憶
-        await add_to_memory(conversation_id, user_input, response)
+        await add_to_memory(conversation_id, user_input, response, emotion_analysis)
         
         # 學習成長（包含情感分析）
         personality_engine.learn_from_interaction(user_input, response, emotion_analysis)
@@ -832,6 +996,9 @@ def main():
     print("  ✅ 📈 情感歷史追踪")
     print("  ✅ 🧠 智慧溫度調節")
     print("  ✅ 🧠 記憶召回功能")
+    print("  ✅ 📝 記憶壓縮摘要")
+    print("  ✅ 🎭 個性融合回應")
+    print("  ✅ 🌱 個性學習與調節")
     
     # 初始化小宸光的靈魂
     global xiaochenguang_soul
@@ -858,10 +1025,16 @@ def main():
         print(f"✅ 資料庫連接成功 - 記憶表: {MEMORIES_TABLE}")
         
         try:
-            personality_test = supabase.table("user_preferences").select("*").limit(1).execute()
+            personality_test = supabase.table("xiaochenguang_personality").select("*").limit(1).execute()
             print(f"✅ 個性特徵表連接成功")
         except:
             print("⚠️ 個性特徵表不存在，將使用預設值")
+        
+        try:
+            emotional_test = supabase.table("emotional_states").select("*").limit(1).execute()
+            print(f"✅ 情緒狀態表連接成功")
+        except:
+            print("⚠️ 情緒狀態表不存在，將使用當前分析")
         
     except Exception as e:
         print(f"❌ 資料庫連接失敗: {e}")
@@ -903,6 +1076,13 @@ def main():
         
     except Exception as e:
         print(f"❌ 機器人啟動失敗: {e}")
-
+	
 if __name__ == "__main__":
-    main()
+    print(recall_memories("我們昨天談到靈魂城堡", "chat123"))
+    print(summarize_memories("chat123"))
+    print(get_latest_trait("chat123"))
+    print(adapt_personality({
+        "emotion": "joy",
+        "intensity": 0.85
+    }))
+	
