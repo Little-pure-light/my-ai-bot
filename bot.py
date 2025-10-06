@@ -1076,13 +1076,6 @@ def main():
         
     except Exception as e:
         print(f"❌ 機器人啟動失敗: {e}")
-	
+
 if __name__ == "__main__":
-    print(recall_memories("我們昨天談到靈魂城堡", "chat123"))
-    print(summarize_memories("chat123"))
-    print(get_latest_trait("chat123"))
-    print(adapt_personality({
-        "emotion": "joy",
-        "intensity": 0.85
-    }))
-	
+    main()
