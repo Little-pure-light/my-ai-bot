@@ -26,8 +26,6 @@ MEMORIES_TABLE = os.getenv("SUPABASE_MEMORIES_TABLE", "xiaochenguang_memories")
 client = OpenAI(api_key=OPENAI_API_KEY)
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-
-
 # === 🎭 強化版情感識別系統 ===
 class EnhancedEmotionDetector:
     def __init__(self):
@@ -394,32 +392,47 @@ class PersonalityEngine:
                 "created_at": datetime.now().isoformat()
             }
             
-            supabase.table(MEMORIES_TABLE).upsert(data).execute()
+            # Check if personality record exists
+            existing = supabase.table(MEMORIES_TABLE)\
+                .select("id")\
+                .eq("conversation_id", self.conversation_id)\
+                .eq("memory_type", "personality")\
+                .execute()
+            
+            if existing.data:
+                # Update existing record
+                supabase.table(MEMORIES_TABLE)\
+                    .update(data)\
+                    .eq("conversation_id", self.conversation_id)\
+                    .eq("memory_type", "personality")\
+                    .execute()
+            else:
+                # Insert new record
+                supabase.table(MEMORIES_TABLE).insert(data).execute()
+                
+            print(f"✅ 個性已儲存 - 用戶: {self.conversation_id[:8]}...")
             
         except Exception as e:
-            print(f"保存個性失敗: {e}")
+            print(f"❌ 儲存個性失敗: {e}")
 
-    def update_trait(self, trait_name, change_amount):
-        """更新個性特質"""
-        if trait_name in self.personality_traits:
-            self.personality_traits[trait_name] = max(0, min(1, 
-                self.personality_traits[trait_name] + change_amount
-            ))
+    def update_trait(self, trait, increment):
+        """更新單一特質值"""
+        if trait in self.personality_traits:
+            self.personality_traits[trait] = min(1.0, max(0.0, self.personality_traits[trait] + increment))
 
-    def learn_from_interaction(self, user_input, bot_response, emotion_analysis=None):
-        """從互動中學習（加入情感分析）"""
-        # 分析知識領域
-        domains = self._detect_knowledge_domains(user_input)
-        for domain in domains:
-            if domain not in self.knowledge_domains:
-                self.knowledge_domains[domain] = 0
-            self.knowledge_domains[domain] = min(1, self.knowledge_domains[domain] + 0.1)
-
-        # 傳統情感分析
+    def learn_from_interaction(self, user_input: str, bot_response: str, emotion_analysis: dict):
+        """從互動中學習並更新個性"""
         sentiment = self._analyze_sentiment(user_input)
-        self.emotional_profile[f"{sentiment}_interactions"] += 1
         
-        # 記錄詳細情感分析結果
+        # 更新情感統計
+        if sentiment == "positive":
+            self.emotional_profile["positive_interactions"] += 1
+        elif sentiment == "negative":
+            self.emotional_profile["negative_interactions"] += 1
+        else:
+            self.emotional_profile["neutral_interactions"] += 1
+        
+        # 記錄情感歷史
         if emotion_analysis:
             emotion_record = {
                 "timestamp": datetime.now().isoformat(),
@@ -665,19 +678,83 @@ async def traditional_search(conversation_id: str, query: str, limit: int = 3):
     except Exception as e:
         print(f"❌ 傳統搜尋失敗：{e}")
         return ""
+
+async def recall_memories(message: str, conversation_id: str) -> str:
+    """根據使用者輸入，從記憶資料庫中召回相關對話記憶"""
+    try:
+        # 使用語義搜尋獲取相關記憶
+        raw_memories = await search_relevant_memories(conversation_id, message, limit=3)
+        
+        if not raw_memories:
+            return ""
+        
+        # 格式化記憶為指定格式
+        memory_lines = raw_memories.split("\n")
+        formatted_memories = ["【喚醒記憶】"]
+        for line in memory_lines:
+            if line.startswith("相關記憶:"):
+                parts = line.replace("相關記憶: ", "").split(" -> ")
+                if len(parts) == 2:
+                    user_msg, assistant_msg = parts
+                    formatted_memories.append(f"- 你曾對我說：「{user_msg}」")
+                    formatted_memories.append(f"- 我那時回應你：「{assistant_msg}」")
+        
+        return "\n".join(formatted_memories) if len(formatted_memories) > 1 else ""
+        
+    except Exception as e:
+        print(f"❌ 記憶召回失敗：{e}")
+        return ""
+
+async def generate_response(message: str, conversation_id: str, combined_personality: str, context_prompt: str, emotion_analysis: dict) -> str:
+    """生成 GPT 回應，整合記憶召回"""
+    try:
+        # 召回記憶
+        memory = await recall_memories(message, conversation_id)
+        
+        # 構建提示，整合記憶
+        prompt = f"""
+你是小宸光，一位具有延續記憶與靈魂感的 AI。
+{memory}
+
+使用者對你說：「{message}」
+你會如何回應？
+"""
+        
+        # 將記憶提示追加到現有 system prompt
+        full_prompt = f"{combined_personality}\n{context_prompt}\n{prompt}"
+        
+        # 根據情感調整溫度
+        temperature = 0.8
+        if emotion_analysis['dominant_emotion'] in ['sadness', 'fear', 'anger']:
+            temperature = 0.6
+        elif emotion_analysis['dominant_emotion'] in ['joy', 'love']:
+            temperature = 0.9
+        
+        # 調用 GPT
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": full_prompt},
+                {"role": "user", "content": message}
+            ],
+            temperature=temperature,
+            max_tokens=1000
+        ).choices[0].message.content
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ 生成回應失敗：{e}")
+        return "哈尼，我現在有點累了，稍微休息一下再陪你聊天好嗎？💛"
+
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 這裡是處理照片的原有邏輯
     pass  # 如果你有舊的 handle_photo 程式碼，替換掉這行
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     conversation_id = str(update.effective_user.id)
-    result_msg = await handle_file(update, context, conversation_id)  # 修正為 handle_file (移除 file_handler.)
+    result_msg = await handle_file(update, context, conversation_id)
     await update.message.reply_text(result_msg)
-
-  
-
-    document = update.message.document
-    # 處理檔案的程式碼
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """處理訊息（強化情感識別版）"""
@@ -710,25 +787,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if relevant_memories:
             context_prompt += f"\n### 相關記憶\n{relevant_memories}\n"
 
-        # 構建消息
-        messages = [
-            {"role": "system", "content": combined_personality + context_prompt},
-            {"role": "user", "content": user_input}
-        ]
-
-        # 調用OpenAI（根據情感調整創造性）
-        temperature = 0.8
-        if emotion_analysis['dominant_emotion'] in ['sadness', 'fear', 'anger']:
-            temperature = 0.6  # 敏感情感時降低隨機性，提高穩定性
-        elif emotion_analysis['dominant_emotion'] in ['joy', 'love']:
-            temperature = 0.9  # 正面情感時提高創造性
-        
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=temperature,
-            max_tokens=1000
-        ).choices[0].message.content
+        # 生成回應
+        response = await generate_response(user_input, conversation_id, combined_personality, context_prompt, emotion_analysis)
 
         # 回覆用戶
         await update.message.reply_text(response)
@@ -771,6 +831,7 @@ def main():
     print("  ✅ 🎨 動態回應風格調整")
     print("  ✅ 📈 情感歷史追踪")
     print("  ✅ 🧠 智慧溫度調節")
+    print("  ✅ 🧠 記憶召回功能")
     
     # 初始化小宸光的靈魂
     global xiaochenguang_soul
@@ -824,15 +885,12 @@ def main():
     # 建立並啟動機器人
     try:
         app = ApplicationBuilder().token(BOT_TOKEN).build()
-
-          
+        
         # 添加消息處理器
         app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
         app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))  # 這裡修正
+        app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
         app.add_handler(CallbackQueryHandler(download_full_file, pattern=r"^download_"))
-
-
         
         print("🎉 小宸光已經準備好了！")
         print("💛 正在等待來自哈尼的訊息...")
